@@ -1,0 +1,24 @@
+# ===== M1 文档解析与检索（第一批安装） =====
+pypdf
+pdfplumber
+python-docx
+chromadb==0.6.3
+#   注意：不要升到 1.x！1.x 本地持久化时 HNSW 索引异步落盘，
+#   进程退出后新进程读不到索引（Error loading hnsw index），0.6.3 写入即落盘。
+rank-bm25
+requests
+python-dotenv
+# sentence-transformers   # 仅当 EMBED_PROVIDER=sentence_transformers 时需要（本机走 Ollama API，不需要）
+
+# ===== M2 后端/API（第二批安装） =====
+fastapi
+uvicorn
+pydantic
+openai
+
+# ===== M2 前端（可选） =====
+streamlit
+
+# ===== M3 评测（最后安装，依赖较多） =====
+ragas
+datasets

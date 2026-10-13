@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>论文阅读问答助手</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Roboto','PingFang SC','Segoe UI',Arial,sans-serif;
+    background:#F4F3EE; color:#1A1B1C; height:100vh; display:flex;
+  }
+  /* ===== 左侧栏 ===== */
+  .sidebar {
+    width:280px; min-width:280px; background:#FFFFFF;
+    border-right:1px solid #E4E3DD; padding:20px 16px;
+    display:flex; flex-direction:column; gap:16px; overflow-y:auto;
+  }
+  .logo { display:flex; align-items:center; gap:10px; }
+  .logo .dot {
+    width:34px; height:34px; border-radius:9px; flex-shrink:0;
+    background:linear-gradient(135deg,#8BC8EA,#A3D5E8);
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:700; color:#1A1B1C;
+  }
+  .logo .name { font-size:16px; font-weight:600; line-height:1.3; }
+  .logo .sub { font-size:11px; color:#6B7280; }
+  .card {
+    background:#F9F8F4; border:1px solid #E4E3DD; border-radius:12px; padding:12px;
+  }
+  .card h3 { font-size:12px; color:#6B7280; font-weight:600; margin-bottom:8px; }
+  .card label { font-size:13px; color:#1A1B1C; display:block; margin-bottom:4px; }
+  .card select, .card input[type=text] {
+    width:100%; padding:8px 10px; font-size:13px; color:#1A1B1C;
+    border:1px solid #D8D6CE; border-radius:8px; background:#FFFFFF;
+    font-family:inherit;
+  }
+  .card select:focus, .card input[type=text]:focus { outline:none; border-color:#8BC8EA; }
+  /* 语料库管理 */
+  .paper-list { display:flex; flex-direction:column; gap:6px; margin-bottom:10px; }
+  .paper-item {
+    display:flex; align-items:center; gap:8px; font-size:12.5px; color:#1A1B1C;
+    background:#FFFFFF; border:1px solid #E4E3DD; border-radius:8px; padding:6px 10px;
+  }
+  .paper-item .pname {
+    flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .paper-item .pcount { color:#6B7280; font-size:11px; flex-shrink:0; }
+  .del-btn {
+    flex-shrink:0; width:22px; height:22px; border:none; border-radius:6px; cursor:pointer;
+    background:transparent; color:#EA6668; font-size:14px; line-height:1;
+  }
+  .del-btn:hover { background:rgba(234,102,104,0.12); }
+  .btn-add {
+    width:100%; padding:8px 10px; font-size:13px; font-weight:600; color:#1A1B1C;
+    border:1px dashed #8BC8EA; border-radius:8px; background:rgba(139,200,234,0.10);
+    cursor:pointer; font-family:inherit;
+  }
+  .btn-add:hover { background:rgba(139,200,234,0.20); }
+  .btn-add:disabled { opacity:0.5; cursor:not-allowed; }
+  .manage-status { margin-top:8px; font-size:12px; color:#6B7280; line-height:1.6; }
+  .manage-status.err { color:#EA6668; }
+  .stat-row { display:flex; justify-content:space-between; font-size:13px; padding:3px 0; color:#1A1B1C; }
+  .stat-row .v { color:#1A1B1C; font-weight:600; }
+  .hint { font-size:12px; color:#6B7280; line-height:1.7; }
+  .hint code {
+    background:#EFEEE8; border-radius:4px; padding:1px 5px;
+    font-size:11px; color:#1A1B1C;
+  }
+  /* ===== 右侧聊天区 ===== */
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
+  .chat-head {
+    padding:14px 24px; background:#FFFFFF; border-bottom:1px solid #E4E3DD;
+    display:flex; align-items:center; justify-content:space-between; gap:12px;
+  }
+  .chat-head .t { font-size:15px; font-weight:600; }
+  .chat-head .scope-tag {
+    font-size:12px; color:#1A1B1C; background:rgba(139,200,234,0.18);
+    border:1px solid rgba(139,200,234,0.5); border-radius:20px; padding:4px 12px;
+  }
+  .chat-body {
+    flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:20px;
+  }
+  .welcome { max-width:640px; margin:8px auto 0; color:#6B7280; font-size:13px; line-height:1.8; }
+  .welcome b { color:#1A1B1C; }
+  .msg { max-width:820px; width:100%; margin:0 auto; }
+  .msg .who { font-size:12px; color:#6B7280; margin-bottom:6px; }
+  .msg .bubble {
+    background:#FFFFFF; border:1px solid #E4E3DD; border-radius:12px; padding:14px 16px;
+    font-size:14px; line-height:1.8; white-space:pre-wrap; word-break:break-word;
+  }
+  .msg.user .bubble { background:rgba(139,200,234,0.12); border-color:rgba(139,200,234,0.4); }
+  .msg.user .bubble .inner { display:flex; gap:8px; align-items:flex-start; }
+  .cite-badge {
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:20px; height:20px; padding:0 5px; border-radius:10px;
+    background:rgba(139,200,234,0.25); border:1px solid rgba(139,200,234,0.7);
+    font-size:11px; font-weight:600; color:#1A1B1C; margin:0 2px; vertical-align:1px;
+  }
+  /* 引用卡片（默认折叠，点击展开片段） */
+  .cites { margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+  .cite-card {
+    border:1px solid #E4E3DD; border-left:3px solid #8BC8EA; border-radius:8px;
+    background:#FCFBF8; padding:10px 12px; font-size:12.5px; line-height:1.6;
+    cursor:pointer; user-select:none;
+  }
+  .cite-card:hover { background:#F8F7F2; }
+  .cite-card .meta { color:#6B7280; font-size:12px; margin-bottom:0; }
+  .cite-card .meta b { color:#1A1B1C; font-weight:600; }
+  .cite-card .toggle-hint { color:#9AA0A6; font-size:11px; margin-left:4px; }
+  .cite-card .cite-snippet {
+    display:none; margin-top:6px; font-size:12px; color:#1A1B1C; background:#F3F2EC;
+    border-radius:6px; padding:8px; white-space:pre-wrap; word-break:break-word;
+    max-height:180px; overflow-y:auto; font-family:Consolas,'Courier New',monospace;
+  }
+  .cite-card.open .cite-snippet { display:block; }
+  /* 校验（默认收起，点击展开） */
+  .verify-wrap {
+    margin-top:10px; border:1px solid #E4E3DD; border-radius:8px;
+    background:#FAFAF7; overflow:hidden;
+  }
+  .verify-head {
+    display:flex; align-items:center; gap:8px; padding:8px 12px;
+    font-size:12.5px; color:#1A1B1C; cursor:pointer; user-select:none;
+  }
+  .verify-head:hover { background:#F8F7F2; }
+  .verify-head .toggle-hint { color:#9AA0A6; font-size:11px; margin-left:auto; }
+  .verify-body { display:none; flex-direction:column; gap:6px; padding:2px 12px 10px; }
+  .verify-wrap.open .verify-body { display:flex; }
+  .verify-line {
+    display:flex; gap:8px; align-items:flex-start; font-size:12.5px; line-height:1.6;
+    background:#FFFFFF; border:1px solid #EFEEE8; border-radius:8px; padding:8px 10px;
+  }
+  .badge {
+    flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; border-radius:50%; font-size:13px; font-weight:700; color:#fff;
+  }
+  .badge.ok { background:#52C41A; }
+  .badge.warn { background:#FAAD14; }
+  .badge.bad { background:#EA6668; }
+  .verify-line .v-text { color:#1A1B1C; }
+  .verify-line .v-reason { color:#6B7280; }
+  /* 输入区 */
+  .chat-input {
+    padding:14px 24px 20px; background:#FFFFFF; border-top:1px solid #E4E3DD;
+  }
+  .input-row { max-width:820px; margin:0 auto; display:flex; gap:10px; }
+  .input-row textarea {
+    flex:1; resize:none; min-height:44px; max-height:140px; padding:11px 14px;
+    font-size:14px; font-family:inherit; color:#1A1B1C; line-height:1.5;
+    border:1px solid #D8D6CE; border-radius:10px; background:#FFFFFF;
+  }
+  .input-row textarea:focus { outline:none; border-color:#8BC8EA; }
+  .btn {
+    padding:0 22px; border:none; border-radius:10px; cursor:pointer;
+    font-size:14px; font-weight:600; color:#1A1B1C; flex-shrink:0;
+    background:linear-gradient(135deg,#8BC8EA,#A3D5E8);
+  }
+  .btn:hover { filter:brightness(0.97); }
+  .btn:disabled { opacity:0.5; cursor:not-allowed; }
+  .status-line { max-width:820px; margin:6px auto 0; font-size:12px; color:#6B7280; }
+  .loading { display:inline-block; width:12px; height:12px; border:2px solid rgba(139,200,234,0.4);
+    border-top-color:#1A1B1C; border-radius:50%; animation:spin 0.8s linear infinite; vertical-align:-2px; margin-right:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (max-width:720px) {
+    body { flex-direction:column; height:auto; min-height:100vh; }
+    .sidebar { width:100%; min-width:0; border-right:none; border-bottom:1px solid #E4E3DD; }
+    .main { height:calc(100vh - 200px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 左侧栏 ===== -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="dot">阅</div>
+    <div>
+      <div class="name">论文阅读问答助手</div>
+      <div class="sub">RAG · 混合检索 · 引用校验</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>问答范围（论文作用域）</h3>
+    <label for="paper-select">选择论文</label>
+    <select id="paper-select">
+      <option value="">全部论文（对比/综述）</option>
+    </select>
+    <div style="margin-top:10px;" class="hint">单篇模式防止多篇论文"串台"；全部模式可跨论文对比。</div>
+  </div>
+
+  <div class="card">
+    <h3>语料库管理</h3>
+    <div class="paper-list" id="paper-list"></div>
+    <button class="btn-add" id="add-btn">＋ 添加论文（PDF）</button>
+    <input type="file" id="file-input" accept=".pdf" hidden>
+    <div class="manage-status" id="manage-status"></div>
+  </div>
+
+  <div class="card">
+    <h3>语料状态</h3>
+    <div class="stat-row"><span>论文篇数</span><span class="v" id="stat-papers">-</span></div>
+    <div class="stat-row"><span>检索块数</span><span class="v" id="stat-chunks">-</span></div>
+    <div class="stat-row"><span>后端状态</span><span class="v" id="stat-health">检查中…</span></div>
+  </div>
+
+  <div class="card">
+    <h3>使用说明</h3>
+    <div class="hint">
+      输入论文相关问题，例如：<br>
+      · <code>AGAN 完整方法的 PSNR 和 SSIM 是多少？</code><br>
+      · <code>Raindrop Clarity 数据集有哪些条件？</code><br>
+      · <code>NightRain 相比 FDM 提升多少？</code><br><br>
+      回答中的 <code>[n]</code> 是引用编号，下方卡片展示证据片段与
+      引用校验结果（<span style="color:#52C41A;">✓ 支持</span> /
+      <span style="color:#FAAD14;">~ 部分支持</span> /
+      <span style="color:#EA6668;">✗ 不支持</span>）。
+    </div>
+  </div>
+</aside>
+
+<!-- ===== 右侧聊天区 ===== -->
+<div class="main">
+  <div class="chat-head">
+    <div class="t">论文问答</div>
+    <div class="scope-tag" id="scope-tag">范围：全部论文</div>
+  </div>
+
+  <div class="chat-body" id="chat-body">
+    <div class="welcome">
+      <b>你好，我是论文阅读问答助手。</b><br>
+      已索引 4 篇雨滴去除方向论文（AGAN / NightRain / Raindrop Clarity / NTIRE2025 挑战赛）。
+      在左侧选择单篇论文或全部论文，然后输入问题。回答带引用溯源与逐条校验，不盲信、可追查。
+    </div>
+  </div>
+
+  <div class="chat-input">
+    <div class="input-row">
+      <textarea id="question" placeholder="输入你的问题，回车发送（Shift+Enter 换行）…" rows="1"></textarea>
+      <button class="btn" id="send-btn" disabled>发送</button>
+    </div>
+    <div class="status-line" id="status-line"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  var chatBody = $('chat-body'), statusLine = $('status-line');
+  var chunkCountByPaper = {};
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  // 轻量渲染：转义 -> 换行 -> 高亮 [n] 引用编号
+  function renderAnswer(text) {
+    var s = esc(text);
+    s = s.replace(/\r?\n/g, '<br>');
+    s = s.replace(/\[(\d+)\]/g, '<span class="cite-badge">$1</span>');
+    return s;
+  }
+
+  function addMsg(role, html) {
+    var msg = document.createElement('div');
+    msg.className = 'msg ' + role;
+    msg.innerHTML = '<div class="who">' + (role === 'user' ? '你' : '助手') + '</div>' +
+      '<div class="bubble">' + html + '</div>';
+    chatBody.appendChild(msg);
+    chatBody.scrollTop = chatBody.scrollHeight;
+    return msg;
+  }
+
+  function verdictBadge(v) {
+    if (v === 'supported') return '<span class="badge ok">✓</span>';
+    if (v === 'partial') return '<span class="badge warn">~</span>';
+    return '<span class="badge bad">✗</span>';
+  }
+  function verdictText(v) {
+    return { supported: '支持', partial: '部分支持', unsupported: '不支持' }[v] || v;
+  }
+
+  function addAnswer(data) {
+    // 回答正文
+    addMsg('assistant', renderAnswer(data.answer || ''));
+
+    // self-correction 提示：第一轮引用证据不足，已补充检索后重新回答
+    if (data.revised) {
+      var note = document.createElement('div');
+      note.className = 'msg assistant';
+      note.innerHTML = '<div class="who">自检修正</div>' +
+        '<div class="bubble" style="font-size:12.5px;color:#1A1B1C;background:rgba(250,173,20,0.10);border-color:rgba(250,173,20,0.45);">' +
+        '第一轮回答存在证据不足的引用，已按校验反馈补充检索并重新回答（self-correction）。</div>';
+      chatBody.appendChild(note);
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+
+    // 引用卡片（默认只显示摘要行，点击展开证据片段）
+    var cites = (data.citations || []).filter(function (c) { return c.snippet; });
+    if (cites.length) {
+      var html = '<div class="cites">';
+      cites.forEach(function (c, i) {
+        html += '<div class="cite-card">' +
+          '<div class="meta">[' + (i + 1) + '] <b>' + esc(c.source || '') + '</b>' +
+          ' · ' + esc(c.section || '') + ' · 第' + esc(c.page || '') + '页' +
+          '<span class="toggle-hint">点击展开片段 ▾</span></div>' +
+          '<pre class="cite-snippet">' + esc(c.snippet || '') + '</pre>' +
+          '</div>';
+      });
+      html += '</div>';
+      addMsg('assistant', html);
+    }
+
+    // 校验结果（默认收起为统计行，点击展开逐条判定）
+    var ver = data.verification || [];
+    if (ver.length) {
+      var counts = { supported: 0, partial: 0, unsupported: 0 };
+      ver.forEach(function (v) { if (counts[v.verdict] != null) counts[v.verdict]++; });
+      var vh = '<div class="verify-wrap">' +
+        '<div class="verify-head">' +
+        '<span class="badge ok" style="width:auto;border-radius:6px;padding:0 6px;">✓ ' + counts.supported + '</span>' +
+        '<span class="badge warn" style="width:auto;border-radius:6px;padding:0 6px;">~ ' + counts.partial + '</span>' +
+        '<span class="badge bad" style="width:auto;border-radius:6px;padding:0 6px;">✗ ' + counts.unsupported + '</span>' +
+        '<span style="color:#6B7280;">引用校验（posthoc attribution）</span>' +
+        '<span class="toggle-hint">点击展开 ▾</span></div>' +
+        '<div class="verify-body">';
+      ver.forEach(function (v) {
+        vh += '<div class="verify-line">' +
+          verdictBadge(v.verdict) +
+          '<div class="v-text">[<b>' + esc(v.cite) + '</b>] ' + verdictText(v.verdict) +
+          '<div class="v-reason">' + esc(v.reason || '') + '</div></div></div>';
+      });
+      vh += '</div></div>';
+      addMsg('assistant', vh);
+    }
+
+    // 未被校验的引用提示
+    if (!cites.length && !ver.length) {
+      addMsg('assistant', '<span style="color:#6B7280;">（回答完成）</span>');
+    }
+  }
+
+  function ask(question) {
+    var paper = $('paper-select').value;
+    $('send-btn').disabled = true;
+    statusLine.innerHTML = '<span class="loading"></span>检索中：混合检索 → Rerank 精排 → 生成回答 → 引用校验…';
+    fetch('/api/qa', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question, paper: paper || null })
+    }).then(function (r) {
+      if (!r.ok) return r.json().then(function (e) { throw new Error(e.detail || r.statusText); });
+      return r.json();
+    }).then(function (data) {
+      statusLine.textContent = '完成 · 命中 ' + (data.retrieved || 0) + ' 个候选块';
+      addAnswer(data);
+    }).catch(function (err) {
+      statusLine.textContent = '';
+      addMsg('assistant', '<span style="color:#EA6668;">请求失败：' + esc(err.message || err) +
+        '</span><br><span style="color:#6B7280;font-size:12px;">确认后端已启动：& D:\\anaconda\\envs\\paper_rag\\python.exe -m uvicorn api.main:app --port 8000</span>');
+    }).finally(function () {
+      $('send-btn').disabled = false;
+      $('question').focus();
+    });
+  }
+
+  function setManageStatus(msg, isErr) {
+    var el = $('manage-status');
+    el.textContent = msg;
+    el.className = 'manage-status' + (isErr ? ' err' : '');
+  }
+
+  // 论文显示名：去掉 .pdf 后缀、下划线换空格
+  function prettyName(fn) { return fn.replace(/\.pdf$/i, '').replace(/_/g, ' '); }
+
+  function loadPapers() {
+    return fetch('/api/papers').then(function (r) { return r.json(); }).then(function (d) {
+      var papers = d.papers || [];
+      chunkCountByPaper = d.counts || {};
+      // 下拉框（保留"全部论文"）
+      var sel = $('paper-select');
+      var cur = sel.value;
+      while (sel.options.length > 1) { sel.remove(1); }
+      papers.forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p; opt.textContent = prettyName(p);
+        sel.appendChild(opt);
+      });
+      if (cur && papers.indexOf(cur) !== -1) { sel.value = cur; }
+      $('stat-papers').textContent = papers.length + ' 篇';
+      // 管理列表
+      var list = $('paper-list');
+      list.innerHTML = '';
+      if (!papers.length) {
+        list.innerHTML = '<div style="font-size:12px;color:#6B7280;">暂无论文，点击下方添加。</div>';
+      }
+      papers.forEach(function (p) {
+        var item = document.createElement('div');
+        item.className = 'paper-item';
+        var count = (chunkCountByPaper[p] != null) ? chunkCountByPaper[p] + ' 块' : '';
+        item.innerHTML = '<span class="pname" title="' + esc(p) + '">' + esc(prettyName(p)) + '</span>' +
+          '<span class="pcount">' + count + '</span>' +
+          '<button class="del-btn" title="删除这篇论文" data-name="' + esc(p) + '">✕</button>';
+        list.appendChild(item);
+      });
+      // 删除按钮绑定
+      Array.prototype.forEach.call(list.querySelectorAll('.del-btn'), function (btn) {
+        btn.addEventListener('click', function () { deletePaper(btn.getAttribute('data-name')); });
+      });
+      return papers;
+    }).catch(function () {
+      $('paper-list').innerHTML = '<div style="font-size:12px;color:#EA6668;">获取论文列表失败</div>';
+      return [];
+    });
+  }
+
+  function uploadPaper(file) {
+    var fd = new FormData();
+    fd.append('file', file);
+    $('add-btn').disabled = true;
+    setManageStatus('正在解析并入库「' + file.name + '」… 约 1~2 分钟（含无边框表 LLM 结构化），请勿关闭页面');
+    fetch('/api/papers/upload', { method: 'POST', body: fd })
+      .then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) throw new Error(d.detail || r.statusText);
+          return d;
+        });
+      })
+      .then(function (d) {
+        setManageStatus('入库完成：' + d.name + '（新增 ' + d.added + ' 块，库内共 ' + d.total + ' 块）');
+        return refreshAll();
+      })
+      .catch(function (err) {
+        setManageStatus('入库失败：' + (err.message || err), true);
+      })
+      .finally(function () { $('add-btn').disabled = false; });
+  }
+
+  function deletePaper(name) {
+    if (!window.confirm('确定删除「' + prettyName(name) + '」？\n将从文件、向量库与索引中移除，不可恢复。')) return;
+    var btn = document.querySelector('.del-btn[data-name="' + name.replace(/"/g, '\\"') + '"]');
+    if (btn) btn.disabled = true;
+    setManageStatus('正在删除「' + prettyName(name) + '」…');
+    fetch('/api/papers/' + encodeURIComponent(name), { method: 'DELETE' })
+      .then(function (r) {
+        return r.json().then(function (d) {
+          if (!r.ok) throw new Error(d.detail || r.statusText);
+          return d;
+        });
+      })
+      .then(function (d) {
+        setManageStatus('已删除：' + d.deleted + '（库内剩余 ' + d.total + ' 块）');
+        return refreshAll();
+      })
+      .catch(function (err) {
+        setManageStatus('删除失败：' + (err.message || err), true);
+      });
+  }
+
+  function refreshAll() {
+    // 刷新论文列表、健康状态与下拉框
+    return Promise.all([
+      loadPapers(),
+      fetch('/health').then(function (r) { return r.json(); }).then(function (d) {
+        $('stat-health').textContent = d.status === 'ok' ? '正常' : '异常';
+        $('stat-chunks').textContent = (d.chunks || 0) + ' 块';
+        chunkCountByPaper = {};
+        return d;
+      }).catch(function () { $('stat-health').textContent = '后端未启动'; })
+    ]);
+  }
+
+  function init() {
+    // 折叠/展开：点击引用卡片显示证据片段，点击校验头展开逐条判定
+    chatBody.addEventListener('click', function (e) {
+      var card = e.target.closest ? e.target.closest('.cite-card') : null;
+      if (card) { card.classList.toggle('open'); return; }
+      var head = e.target.closest ? e.target.closest('.verify-head') : null;
+      if (head) {
+        var wrap = head.parentNode;
+        if (wrap) { wrap.classList.toggle('open'); }
+      }
+    });
+
+    // 论文列表
+    fetch('/api/papers').then(function (r) { return r.json(); }).then(function (d) {
+      var sel = $('paper-select');
+      (d.papers || []).forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = prettyName(p);
+        sel.appendChild(opt);
+      });
+      $('stat-papers').textContent = (d.papers || []).length + ' 篇';
+      loadPapers();
+    }).catch(function () { $('stat-papers').textContent = '获取失败'; });
+
+    // 健康状态
+    fetch('/health').then(function (r) { return r.json(); }).then(function (d) {
+      $('stat-health').textContent = d.status === 'ok' ? '正常' : '异常';
+      $('stat-chunks').textContent = (d.chunks || 0) + ' 块';
+      $('send-btn').disabled = false;
+    }).catch(function () {
+      $('stat-health').textContent = '后端未启动';
+    });
+
+    // 范围标签
+    $('paper-select').addEventListener('change', function () {
+      var v = this.value;
+      var label = v ? '范围：' + v.replace(/\.pdf$/i, '').replace(/_/g, ' ') : '范围：全部论文';
+      $('scope-tag').textContent = label;
+    });
+
+    // 添加论文按钮
+    $('add-btn').addEventListener('click', function () {
+      $('file-input').value = '';
+      $('file-input').click();
+    });
+    $('file-input').addEventListener('change', function () {
+      if (this.files && this.files.length) { uploadPaper(this.files[0]); }
+    });
+
+    var ta = $('question');
+    ta.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        var q = ta.value.trim();
+        if (q) { addMsg('user', esc(q)); ta.value = ''; ask(q); }
+      }
+    });
+    $('send-btn').addEventListener('click', function () {
+      var q = ta.value.trim();
+      if (q) { addMsg('user', esc(q)); ta.value = ''; ask(q); }
+    });
+    ta.focus();
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
