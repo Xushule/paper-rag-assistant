@@ -1,198 +1,161 @@
-# 论文阅读问答助手
+# 论文阅读问答助手（Paper RAG Assistant）
 
-基于 RAG 的论文阅读与写作辅助工具：上传论文（PDF）即可针对论文内容多轮问答，回答带引用溯源；后续叠加写作助手功能（大纲、润色、综述归纳、参考文献格式化）。
+> 基于 RAG（检索增强生成）的论文阅读问答系统：上传论文 PDF 即可针对论文内容多轮问答，回答自带**引用溯源**与**证据校验**；支持多篇论文语料库管理与跨论文对比。
 
-## 当前进度
+面向 AI 应用开发岗的独立项目，核心解决论文类 PDF 问答的三个实际问题：**结构化表格怎么检索**、**多篇论文怎么隔离不串台**、**跨论文对比怎么保证公平不遗漏**。
 
+---
 
+## 技术栈
 
-* [x] 需求文档 v0.1（`需求文档.md`）
+| 模块 | 选型 | 说明 |
+|---|---|---|
+| LLM | DeepSeek API（deepseek-chat） | 问答生成 / LLM 精排 / 引用校验 / 查询扩展 |
+| Embedding | Ollama 本地 bge-m3（1024 维） | 本地部署，中英混合 |
+| 向量库 | ChromaDB（0.6.3） | 持久化 + metadata 过滤 |
+| 稀疏检索 | BM25（rank-bm25） | 与向量检索做 RRF 混合 |
+| PDF 解析 | pdfplumber | 按单词坐标还原双栏 / 表格 |
+| 服务 | FastAPI + uvicorn | REST API + 托管 Web 界面 |
+| 前端 | 原生 HTML/JS 单页 | 聊天界面 + 引用卡片 + 语料库管理 |
 
-* [x] 技术选型 v0.1（`技术选型.md`）
+---
 
-* [x] M1 数据管道：PDF 解析 -> 结构感知分块 -> Embedding 入库 -> BM25 索引
+## 系统架构
 
-* [x] M2 混合检索（RRF）+ 查询改写 + DeepSeek 问答接口（带引用溯源）
+```mermaid
+flowchart TB
+    subgraph IN["数据管道（离线）"]
+        PDF["论文 PDF（多篇）"] --> PARSE["pdfplumber 解析<br/>双栏还原 / 表格结构化"]
+        PARSE --> CHUNK["结构感知分块<br/>表格独立成块 + 锚点"]
+        CHUNK --> EMB["bge-m3 Embedding"]
+        CHUNK --> BM25["BM25 索引"]
+        EMB --> VDB[("Chroma 向量库<br/>source 元数据）")]
+    end
 
-* [x] M2.5 表格结构化：PDF 表格检测 -> 结构化转 Markdown 表格入库（防行列错乱）
+    subgraph QA["问答链路（在线）"]
+        Q["用户问题"] --> ROUTE["意图路由<br/>元问题 / 对比 / 单篇 / 普通"]
+        ROUTE --> EXPAND["LLM 查询扩展<br/>多子查询"]
+        EXPAND --> HYBRID["混合检索<br/>向量 + BM25 → RRF 融合<br/>scope 论文隔离"]
+        HYBRID --> MMR["MMR 多样性选片段"]
+        MMR --> RERANK["LLM 精排 top5"]
+        RERANK --> GEN["DeepSeek 生成回答<br/>带 [n] 引用"]
+        GEN --> VERIFY["引用校验<br/>supported / partial / ✗"]
+        VERIFY -->|"证据不足"| RETRY["self-correction<br/>补充检索合并重生成"]
+        RETRY --> GEN
+    end
 
-* [x] M2.6 Rerank 精排：LLM 打分重排（粗排 top20 -> 精排 top5，paper-qa 同款思路）
-
-* [x] M2.7 引用校验：posthoc attribution（回答后逐条核对 \[n] 引用是否被片段支持，OpenScholar 同款）
-
-* [x] M2.8 无边框表结构化：列对齐启发式定位 + LLM 判定 / 转 Markdown（补 find\_tables 漏掉的数值表）
-
-* [x] M2.9 Web 界面：单页聊天界面（论文作用域下拉 + 问答 + 引用卡片 + 校验徽标）+ **语料库管理**（添加 / 删除论文，增量入库），`web/index.html`，由 FastAPI 直接托管（`GET /`）
-
-* [x] M2.10 校验反馈再检索（self-correction）：校验发现 unsupported/partial 引用 → LLM 构造补充查询 → 再检索合并证据 → 重新生成并再校验（OpenScholar 同款闭环）
-
-* [x] M2.11 LLM 查询扩展：问答检索前用 LLM 把问题扩成多个子查询 → 多路混合检索 → 跨路 RRF 融合 → 一次精排（提升专有名词 / 不同表述的召回）
-
-* [x] M2.12 语料库元问题通道：问 "库里有几篇 / 哪些 / 有没有 XX 论文" 时跳过语义检索，直接按分块元数据 source（论文 id）分组列清单回答（元问题是 RAG 语义检索盲区，论文正文不会写 "我收录了几篇论文"）
-
-* [x] M2.13 MMR 多样性选片段：全库模式下候选池先按论文配额补足（每篇单独 scope 检索 top2），再 MMR（相关度 − 与已选片段冗余度）挑多样化的 top8，最后 LLM 精排（解决跨论文对比时候选被少数论文垄断；实测 "有哪些去雨方法" 候选从 3/4/3/2 均衡为 2/2/2/2）
-
-* [x] M2.14 对比专用链路：检测对比意图（对比 / 区别 / 相比 / vs 等）+ 识别问题点名的库内论文（独特关键词 + arXiv id）→ 每篇用 "剥离他篇名字" 的子查询 + scope 单独检索 → 合并精排 → **每篇点名论文至少 1 块进最终**；未点名但指代全库（"这四个论文 / 所有论文"）时按全部论文逐篇对比（解决 "AGAN 和 NightRain 有什么不同" 时 NightRain 垄断、AGAN 0 块；及 "对比这四个论文" 把外部基线 IDT/RDiffusion 误当论文、漏掉 2 篇的问题）
-
-* [ ] M3 写作助手功能（下一步）
-
-* [ ] M4 Docker 部署 + 简历包装
-
-## 目录结构
-
-
-
+    VDB --> HYBRID
+    BM25 --> HYBRID
+    VERIFY --> OUT["回答 + 引用溯源 + 校验结果"]
+    OUT --> UI["Web 界面 / REST API / CLI"]
 ```
-论文阅读问答助手/
-├── 需求文档.md / 技术选型.md
-├── data/
-│   ├── papers/            # 把论文 PDF 放这里（当前 4 篇）
-│   ├── chroma_db/          # 向量库（Chroma 持久化）
-│   └── bm25.pkl / chunks.pkl  # BM25 索引与分块元数据缓存
-├── src/
-│   ├── config.py          # 全局配置（路径、模型、API Key 解析）
-│   ├── ingest.py          # 数据管道入口
-│   ├── parser/            # PDF 解析 + 结构感知分块
-│   ├── retrieval/         # Chroma 向量库 + BM25 + RRF 混合检索
-│   └── qa/                # 查询改写 + DeepSeek 问答（引用溯源）
-├── api/
-│   └── main.py            # FastAPI 问答接口
-├── scripts/
-│   ├── verify_retrieval.py # 检索验证脚本
-│   ├── ask.py              # CLI 问答
-│   └── stats_chunks.py     # 分块质量诊断
-├── requirements.txt
-├── .env.example           # 复制为 .env 后填写
-└── .gitignore
-```
+
+---
+
+## 核心亮点
+
+### 1. 三路意图路由：元问题 / 对比 / 单篇问答
+
+RAG 对"语料库元问题"有结构性盲区——论文正文不会写"我收录了几篇论文"，语义检索只能捞到参考文献区等沾边碎片（实测问"有几篇论文"时 NightRain 0 块）。系统按意图分流：
+
+- **元问题通道**：问"库里有几篇 / 有没有 XX 论文"→ 跳过语义检索，直接按分块元数据 `source` 分组列清单 → 实测 4/4 篇全覆盖、引用全部 supported
+- **对比专用链路**：检测对比意图 → 识别问题点名的库内论文（每篇的**独特关键词**，避免"Raindrop"这类 3 篇共有的词误点名）→ 对每篇用"剥离他篇名字"的子查询 + 单篇作用域检索 → **精排 top10 后每篇至少 1 块进最终**（先每篇保底再按精排补齐，避免名额互相顶替）
+- **单篇作用域**：向量检索走 Chroma metadata 过滤（`where={"source": ...}`），保证多篇论文不串台
+
+> 实测：修正前"对比这四个论文"把论文里的外部基线（IDT/RDiffusion）误当论文回答、漏掉 2 篇；修正后引用覆盖 **4/4 篇**，且诚实标注"检索片段中未找到统一数据集上的直接定量对比"——不编造。
+
+### 2. 防幻觉闭环：引用校验 + self-correction
+
+回答生成后不是直接交付，而是闭环自检：
+
+- **引用校验（posthoc attribution，OpenScholar 同款）**：逐条核对回答中每个 `[n]` 引用支撑的断言是否真的被对应片段支持，输出 supported / partial / unsupported 与理由
+- **self-correction**：校验发现证据不足 → LLM 构造补充查询 → 再检索合并证据 → 重新生成并再校验（最多 1 轮，防无限循环）
+- 实测能抓出模型自己的错误：回答把结论误引到公式块时，校验器判 `[4] 不支持`——"数据对，但引用错"也能识别
+
+### 3. 论文表格结构化（PDF 问答最难啃的骨头）
+
+论文数值表（PSNR/SSIM、排名表）**几乎全是无边框对齐表**，常规 `find_tables()` 检测不到（4 篇论文 18 个表格区域只有 1 个真表）。方案：
+
+1. 按单词坐标做**列对齐启发式**定位候选（关键：双栏拆分防左右栏误并、跨栏合并防宽表被劈）
+2. 交给 LLM 判定"是否真表 + 转 Markdown"（误报如作者列表 / 结构图标签 / 公式由模型兜底过滤）
+3. 表格**独立成块**入库，`Table 1.` 说明行并入作检索锚点；引用校验对表格块给**全文**（防关键数据行被截断导致误判）
+
+> 实测：问"AGAN 完整方法在雨滴数据集上的 PSNR/SSIM"答出 **31.57 / 0.9023**（精确命中 `Ours (AA+AD)` 行，区分 A+AD 30.60/0.8710）；问"NightRain 比 FDM 好多少"答出 **PSNR 26.73 vs 23.49、SSIM 0.8647 vs 0.7657**（表格块，引用 supported）。
+
+### 4. 检索质量三板斧：查询扩展 + MMR + LLM 精排
+
+- **LLM 查询扩展**：检索前把问题扩成多个子查询（专有名词 / 方法名 / 术语同义表述），多路混合检索 + **跨路 RRF 融合**（解决不同查询分数不可比）
+- **MMR 多样性**：全库模式下先按论文配额补池（每篇 scope 检索 top2，防"候选池垄断时 MMR 无米下锅"），再 MMR（相关度 − 与已选片段冗余度，λ=0.7）选多样化的 top8——实测"有哪些去雨方法"候选从 3/4/3/2 均衡为 **2/2/2/2**
+- **LLM 精排**：Ollama 官方无 `/api/rerank` 端点（模型可拉但调用 404，社区均有验证），改用 LLM 对 top20 候选一次性打分重排（paper-qa 同款思路，JSON 输出、单次请求）
+
+### 5. 完整工程化：Web 界面 + 语料库管理
+
+- 单页聊天界面：论文作用域下拉、引用卡片（点击展开片段）、校验徽标（✓/~/✗）、"自检修正"提示
+- **添加 / 删除论文**：增量入库、上传失败回滚（删块 + 删文件不留脏状态）；解决同进程多 Chroma 客户端互锁（复用同一 collection）
+- 多轮记忆：保留最近 4 轮，follow-up 问题（"那损失函数呢？"）检索时拼接上一轮问题解决省略指代
+
+---
+
+## 量化结果
+
+| 维度 | 结果 |
+|---|---|
+| 语料 | 4 篇雨滴去除 / 去雨论文 → **169 个分块**（AGAN 26 / NightRain 28 / NTIRE 82 / Raindrop 33，向量库 / BM25 / 分块缓存三方一致） |
+| 跨论文对比 | "对比这四个论文" 引用覆盖 **4/4 篇**（任务 / 方法 / 数据集三层归纳，无外部基线误判） |
+| 元问题 | "这里有几篇论文" 稳定列出全部 4 篇，引用 4/4 supported |
+| 表格问答 | 31.57 / 0.9023（AGAN 表格精确命中）；26.73 / 23.49（NightRain vs FDM） |
+| 论文隔离 | 锁定 AGAN 问"数据集有什么特点"只答 1,119 对；锁定 Raindrop Clarity 同问答 15,186 对——互不串台 |
+| 多轮记忆 | "那白天和夜间各多少张？" 正确理解为 5,442 / 9,744 |
+| 防幻觉 | 校验器主动抓出"片段未直接给出夜间总数（需推断）"等 partial 引用，不盲信生成引用 |
+
+---
 
 ## 快速开始
 
-
-
-```
-# 1. 创建环境（Anaconda；Python 3.10）
-conda create -n paper_rag python=3.10 -y
-conda activate paper_rag
-
-# 2. 安装依赖
+```bash
+# 1. 环境（Python 3.10）
+conda create -n paper_rag python=3.10 -y && conda activate paper_rag
 pip install -r requirements.txt
 
-# 3. 确保 Ollama 已启动（任务栏右下角有 Ollama 图标）
-#    bge-m3 是 Ollama 版（GGUF），通过本地 API 调用，无需下载模型
+# 2. 配置（LLM Key 二选一：DeepSeek API / 本地 Ollama）
+copy .env.example .env        # 填 LLM_API_KEY，或已配置系统环境变量 Deepseek_Key
+# 本地模式：LLM_PROVIDER=local、LLM_BASE_URL=http://localhost:11434/v1、LLM_MODEL=qwen3:8b
 
-# 4. 配置（LLM API Key 二选一）
-copy .env.example .env
-#   - DeepSeek：.env 的 LLM_API_KEY 填 sk- 开头的 Key，或已配置系统环境变量 Deepseek_Key
-#   - 本地模式：.env 改 LLM_PROVIDER=local、LLM_BASE_URL=http://localhost:11434/v1、LLM_MODEL=qwen3:8b
+# 3. 放入论文 PDF（data/papers/，支持多篇）+ 启动 Ollama（bge-m3）
 
-# 5. 放入论文（支持多篇，全放 data\papers\ 即可）
-
-# 6. 数据管道
+# 4. 数据管道 + 验证 + 问答
 python src/ingest.py
-
-# 7. 验证检索
 python scripts/verify_retrieval.py
-
-# 8. CLI 问答
 python scripts/ask.py "夜间雨滴去除的难点是什么？"
 
-#    锁定某篇论文（防止多篇论文串台）：
-python scripts/ask.py --paper "Raindrop Clarity" "数据集包含哪些条件？"
-
-#    交互模式（默认锁定第一篇论文，多轮记忆）：
-python scripts/ask.py
-#       /papers            列出库内论文
-#       /paper <关键词>     切换当前论文（只在这篇论文里检索）
-#       /all               切回全库检索
-#       /reset             清空对话历史
-#       q                  退出
-
-# 9. 启动 API（端口 8000）
-python -m uvicorn api.main:app --port 8000
-#    接口：POST /api/qa {"question": "..."}    GET /health
+# 5. Web 界面
+python -m uvicorn api.main:app --port 8000    # 打开 http://127.0.0.1:8000
 ```
 
-## 说明
+CLI 交互模式：`/papers` 列出论文、`/paper <关键词>` 锁定单篇、`/all` 全库对比、`/reset` 清空历史。
 
+---
 
+## 目录结构
 
-* 模型选择：LLM 默认走 DeepSeek API；Embedding 默认走本地 Ollama 的 bge-m3（1024 维，中英混合）。
+```
+├── data/papers/          # 论文 PDF
+├── src/
+│   ├── parser/           # PDF 解析 + 结构感知分块 + 表格结构化（双栏 / 无边框表）
+│   ├── retrieval/        # Chroma 向量库 + BM25 + RRF 混合 + MMR + LLM 精排
+│   └── qa/               # 意图路由 + 查询扩展 + 生成 + 引用校验 + self-correction
+├── api/main.py           # FastAPI 接口（问答 / 上传 / 删除论文）
+├── web/index.html        # 单页聊天界面
+├── scripts/              # CLI 问答 / 检索验证 / 分块诊断
+└── docs/开发日志.md        # 完整开发过程与 14 条踩坑记录（面试可深挖）
+```
 
-* **论文作用域**：交互模式默认锁定一篇论文，向量检索走 Chroma metadata 过滤（`where={"source": ...}`），BM25 路检索后过滤，保证回答不会跨论文 "串台"；`/all` 可切全库做对比 / 综述类提问。
+---
 
-* **多轮记忆**：系统保留最近 4 轮问答；follow-up 问题（"那损失函数呢？"）检索时拼上上一轮问题（解决省略指代落空），prompt 附对话历史供模型理解指代。
+## Roadmap
 
-* **表格处理**：解析时用 `find_tables()` 定位表格区域，区域内的单词不再按文本平铺（否则出现 `I1 I2 In I1 I2 In` 式行列错乱碎片），改用 `extract_table()` 抽出行列、转成 Markdown 表格，并在分块时**独立成块**（连续表格行打包成单独块，避免被正文稀释），表格前的说明行（"Table 1. ..."）并入表格块作为检索锚点；结构图被误判的 "伪表格"（行 / 列数不达标）自动跳过。**无边框表补漏（M2.8）**：学术数值表（PSNR/SSIM、排名表）几乎都是无边框对齐表，`find_tables()` 检测不到 —— 先按单词坐标做列对齐启发式定位候选（双栏拆分 + 跨栏合并），再交给 LLM 一次性判定 "是否真表 + 转 Markdown"（`TABLE_LLM` 开关，误报由模型兜底为 NOT\_TABLE），LLM 确认的表区域剔除单词、按 top 坐标插回正文流；参考文献候选（行首 `[n]`）粗筛跳过。图片仅保留图注文字作为代理文本，视觉理解是后续方向。
+- [x] M1 数据管道 / M2 混合检索问答 / 表格结构化 / Rerank / 引用校验 / self-correction / 查询扩展 / 元问题通道 / MMR / 对比专用链路 / Web 界面与语料库管理
+- [ ] M3 写作助手：基于库内论文生成综述段落、润色、参考文献格式化
+- [ ] M4 Docker 部署 + 接入更多论文语料
 
-* **Rerank 精排**：混合检索（RRF）只保证 "好文档不漏"，排序并非真实相关度。问答前用 LLM（DeepSeek）对 top20 候选逐条打分重排、取 top5（paper-qa 同款思路；OpenScholar/RAGFlow/QAnything 用 cross-encoder）。注：Ollama 官方至今无 `/api/rerank` 端点（模型可 pull 但调用 404），故当前未走 cross-encoder 分支。
-
-* **引用校验（posthoc attribution）**：回答生成后再次调用 LLM，逐条核对 "回答中每个 \[n] 引用支撑的断言是否真的被对应片段支持"，输出 supported /partial/unsupported 判定与理由（OpenScholar 论文同款机制）；校验失败静默跳过，不阻塞回答。CLI 中每条引用带 ✓/\~ /✗ 标记，回答后可查看逐条校验理由。
-
-* **校验反馈再检索（self-correction，M2.10）**：校验结果中存在 unsupported /partial 引用时，把 "校验理由" 交给 LLM 生成 2 个补充检索查询 → 再做混合检索 + 精排 → 新旧片段按 chunk\_id 去重合并（最多 10 个）→ 重新生成回答并再校验；最多补 1 轮，防止无限循环。接口返回 `revised` 标记，前端显示 "自检修正" 提示。实测：问 "Raindrop Clarity 解决了什么不足" 从第一轮引用标题页 / 引言（✗），修正后引用 Introduction / Social Impacts / 表格章节等正确片段，校验 4 条 supported。
-
-* **LLM 查询扩展（M2.11）**：检索前用 DeepSeek 把用户问题扩成 2 个补充查询（英文优先、从专有名词 / 方法名 / 数据集名 / 术语同义表述等不同角度），主查询 + 扩展查询**各走一路混合检索**（向量 + BM25），再对每路的候选排名做**跨路 RRF 融合**（`score = Σ 1/(60+rank)`，解决不同查询分数不可比），最后 LLM 精排取 top5。`config.QUERY_EXPAND` 开关（默认开），扩展失败自动回退单路检索。与 self-correction 叠加：第一轮就扩大召回，第二轮再按校验反馈补证据。实测："NightRain 比 FDM 好多少" 直接答出 PSNR 26.73 vs 23.49、SSIM 0.8647 vs 0.7657（表格块），引用 supported。
-
-* **语料库元问题通道（M2.12）**：全库模式问 "这里有几篇论文 / 有哪些论文 / 有没有 XX 论文" 时，**跳过语义检索**，直接按 chunk 元数据 `source`（论文 id）分组列清单（每篇附标题页 / 摘要代表块 + 块数），LLM 只基于清单回答，引用指向各篇代表块并照常校验。原因（实测）：论文正文不会写 "我这里收录了几篇论文"，语义检索对这类问题只能捞到参考文献区 / 结论段等沾边碎片 —— 问 "这里有几篇论文" 时 top12 候选里 NightRain 0 块、AGAN 1 块（Conclusion 碎片），回答自然漏篇。改后 "这里有几篇论文" 稳定列出全部 4 篇、引用 4/4 supported。触发条件：`scope=None` 且命中元问题正则（几篇论文 / 哪些论文 / 论文列表 / 语料库 / 收录 / 库里 / 库中 / 一共 N 篇 / 有没有 XX 论文）。
-
-* **MMR 多样性选片段（M2.13）**：全库模式下候选池先按论文配额补足 —— 对每篇论文单独 scope 检索 top2 并入候选池（保证每篇都有代表，解决 "候选池被单篇垄断时 MMR 无米下锅"），再跑 MMR（`score = λ·Rel(q,d) − (1−λ)·max Sim(d,d')`，相关度用 RRF 分数归一化、相似度用 bge-m3 向量余弦，向量从 Chroma 直接取不重复编码）从池里选多样化的 `MMR_TOP_K=8` 个，最后 LLM 精排 top5。`config.MMR_ENABLED / MMR_TOP_K / MMR_LAMBDA`（λ 越大越重相关度，越小越重多样性）。实测：问 "论文里有哪些去雨方法？" 候选从 NightRain 3/NTIRE 4/RC 3/AGAN 2 均衡为 2/2/2/2。**边界（由 M2.14 补齐）**：若问题点名某篇论文（如 "AGAN 和 NightRain 的方法有什么不同"），检索 / MMR 相关度 / 精排每一环都偏向被点名方，MMR 只能分散已有候选、无法创造缺失来源。
-
-* **对比专用链路（M2.14）**：全库模式命中对比意图（对比 / 区别 / 差异 / 不同 / 相比 / 比较 / 哪个好 / vs 等正则）时，先识别问题点名的库内论文 —— 用每篇论文的**独特关键词**（该篇标题词里别篇没有的词 + arXiv id）做子串匹配，避免 "Raindrop" 这类 3 篇共有的词同时点名 3 篇；**未点名但指代全库**（"这四个论文 / 所有论文 / 这些"）时按全部论文逐篇对比，避免退化成普通检索被单篇垄断（实测修正前把 RC 论文里的外部基线 IDT/RDiffusion 误当论文回答、漏掉 NTIRE/NightRain）。检索阶段对每篇用**剥离他篇名字**的子查询 + scope 单独检索 top3（全部论文模式用固定"论文简介"查询），合并 + 全局补充一路 → LLM 精排 top10 → **每篇点名论文至少 1 块**（先每篇保底再按精排补齐 top5）。实测："对比一下这四个论文有什么不同" 引用覆盖 4/4 篇（AGAN 单图雨滴 + attention GAN、NightRain 夜间视频 adaptive 双模块、NTIRE2025 挑战赛、RC 四种条件数据集），不再误把外部基线当论文；"AGAN 和 NightRain 的方法有什么不同" 覆盖 2/2 篇；"NightRain 相比 FDM 提升多少"（FDM 非库内论文）正确只引用 NightRain 答出 PSNR 26.73 vs 23.49。
-
-* 只处理开放获取 / 自有论文；API Key 只放 `.env` 或系统环境变量，已加入 `.gitignore`。
-
-## 踩坑记录（面试可讲）
-
-
-
-1. **双栏论文解析**：pypdf 抽双栏会左右交错（ECCV/CVPR 排版），改用 pdfplumber 按单词坐标分左右栏、栏内排序，恢复阅读顺序。
-
-2. **PDF 丢空格**：部分 PDF 内容流里没有空格字符（如 `learning-basedmethodshavebeenproposed`），`extract_words` 需传 `x_tolerance=1.5` 按几何间距切词。
-
-3. **标题误判**：图注 / 作者名 / 页眉（`Input`、`Feng Lu`、`2 Y. Jin et al.`）会被当成章节标题，改为 "编号标题 + 关键词白名单 + 特征词排除"。
-
-4. **chromadb 1.x 持久化 bug**：写入后新进程读取报 `Error loading hnsw index`（索引异步落盘未完成），固定 `chromadb==0.6.3` 解决。
-
-5. **API Key 中文占位符**：`.env` 里填 `sk-你的Key` 会被 openai 客户端以 ascii 编码报错；改为从系统环境变量 `Deepseek_Key` 回退读取。
-
-6. **中文问英文论文**：BM25 是关键词匹配，中文术语匹配不到英文正文，用中英术语词典改写查询（`query_rewriter.py`）。
-
-7. **表格行列错乱**：表格文字按坐标平铺会丢列关系（实测 `I1 I2 In I1 I2 In` 重复碎片污染检索），用 `find_tables()` 定位 + `extract_table()` 结构化转 Markdown；结构图会被误判成表格，用 "行数 ≥3 且列数 ≥2 且 ≥2 行实心" 过滤伪表格。
-
-8. **删除向量库被锁**：`ask.py` 交互窗口持有 chroma 文件句柄后，Windows 下 `Remove-Item` 会一直挂起 —— 重建索引前必须先关闭所有 `ask.py` 窗口（或退出 python 进程）。本次即因 ask.py 窗口未关导致旧库删不掉、ingest 只能往旧库 upsert 留下脏数据，关闭窗口后删除重建解决。
-
-9. **表格块检索不到**：表格与正文混在同一块时被正文稀释，检索 "表 1 的数值" 排名靠后；改成分块时表格独立成段，并把 "Table 1." 说明行并入表格块作锚点。
-
-10. **BM25 数字字母粘连分词**：`248Quadruplets` 被 `[a-zA-Z0-9]+` 切成单个 token，查询 "Quadruplets" 匹配不上；分词改为数字与字母分开切（`[a-zA-Z]+|[0-9]+`）。
-
-11. **Ollama 没有 rerank 端点**：`ollama pull bge-reranker-v2-m3` 能拉下模型，但调用 `/api/rerank` 一律 404——Ollama 官方至今（0.34.x）未发布该端点（RAGFlow/Dify/FastGPT 社区均有验证记录）。改为 `RERANK_MODE=llm`：用已配置的 DeepSeek 对 top20 候选一次性打分（JSON 输出、单次请求、约 6K tokens），质量等同 paper-qa 的 LLM rerank；若未来 Ollama 支持或换 llama.cpp server 再切回 cross-encoder。
-
-12. **无边框数值表被漏抽**：`find_tables()` 只认边框线，PSNR/SSIM 表、挑战赛排名表等无边框对齐表全部漏检（4 篇共 18 个表格区域只有 1 个真表）。解决：先按单词坐标做列对齐启发式定位候选（关键是双栏拆分 —— 同一 top 的左右栏行会被误并，以及跨栏合并 —— 宽表被栏中线劈成两半），再让 LLM 判定 + 结构化；误报（作者列表 / 结构图标签 / 公式 / 参考文献）由 LLM 兜底过滤。
-
-13. **引用校验对表格块误判**：回答引用的表格块若只给前 200\~400 字符片段，关键数据行（如 `Ours (AA+AD) | 31.57 | 0.9023`）落在截断点之后，校验器会把 "支持" 误判成 "不支持"（声称 "数值在片段中被截断"）。修复：citations 组装与校验器两处都对 Markdown 表格块给**全文**（普通片段仍截断）。
-
-14. **同一进程多 Chroma 客户端互锁**：给 Web 加 "上传 / 删除论文" 时，若每次操作都新建 `VectorStore()`（新 PersistentClient 打开同一目录），同进程内会与其他客户端互锁 / 状态不一致。改为**复用已加载&#x20;**`QASystem`**&#x20;的同一个 collection** 做增量 add/delete，完成后从磁盘重读 bm25/chunks 原地替换 `_qa` 的引用；上传失败回滚（删块 + 删文件）不留脏状态。
-
-## 实测状态
-
-
-
-* 语料：4 篇雨滴去除 / 去雨论文（Raindrop Clarity / AGAN / NightRain / NTIRE2025 挑战赛），共 **169 个块**（AGAN 26 / NightRain 28 / NTIRE 82 / Raindrop 33，chroma 向量库 /chunks.pkl/ BM25 三者一致）。
-
-* 混合检索 + DeepSeek 问答端到端通过：数据规模类问题（"15,186 对图像，5,442 白天、9,744 夜间"）精确命中；方法类问题能定位到正确论文并带 \[n] 引用溯源。
-
-* **表格结构化实测**：Raindrop Clarity 表 1（数据集统计）抽成独立 Markdown 表格块（含 "Table 1" 说明锚点），问 "表 1 中 Pairs、Triplets、Quadruplets 各多少图像" 答出 919 Pairs→1,838、248 Quadruplets→992、4,818 Pairs→9,636、3,606Triplets+1,836Pairs→14,490 等表格数值并引用表格块；结构图误判的伪表格（NTIRE 挑战赛报告）被正确跳过。
-
-* **论文作用域实测**：锁定 AGAN 问 "数据集有什么特点" 只回答 1119 对 / 采集设备（Raindrop Clarity 同问为 15,186 对 / 四种条件），互不串台；找不到的内容诚实回答 "检索片段中未找到"，不编造、不跨论文硬凑。
-
-* **多轮记忆实测**：先问 "Raindrop Clarity 数据集包含哪些条件？"，再问 "那白天和夜间各有多少张？" 正确理解为 5,442 / 9,744。
-
-* **Rerank 实测**：单元验证 —— 把其他论文的块混入候选，精排后含答案的块排第一（9.0 分）、无关块全部落出 top5；端到端 ——"数据集多少对图像？白天夜间各多少？" 回答 15,186 对（5,442 白天 / 9,744 夜间）并细分 raindrop/background-focused，引用命中数据章节与表格块。
-
-* **引用校验实测**：问 "数据集有多少张图像？白天夜间各多少？" 后校验器逐条判定 —— 总数类断言（\[1]\[3]）判 "支持"，并主动抓出两处 "部分支持"：片段未直接给出夜间总数 9,744（需推断）、细分数字不在所引片段中。系统不会盲信模型生成的引用。
-
-* **无边框表结构化实测（M2.8）**：`_verify_llm_tables` 全量验证 ——AGAN 表 1（Method/PSNR/SSIM 6 行）、NightRain 表 1（Methods/Venue/PSNR/SSIM 9 列）、NTIRE 排名表（32 队：Teams/Final Score/PSNR/SSIM/LPIPS/Params/GFlops/Ensemble/Rank）、Raindrop 第 10 页（Day/Night × PSNR/SSIM/LPIPS 6 行 9 列）全部转成 Markdown 入库；额外发现 NTIRE 第 12 页 Dataset/Value 表；误报（作者列表、结构图标签、公式、参考文献）全部被 LLM 过滤。
-
-* **无边框表问答实测**：问 "AGAN 完整方法在雨滴数据集上的 PSNR 和 SSIM 是多少？" 回答 31.57 / 0.9023（正确，表格块被精确命中，区分 A+AD 30.60/0.8710 与 Ours AA+AD 31.57/0.9023）；引用校验 \[1] 判 "支持"（完整表格含 Ours 行），同时抓出回答把结论误引到公式块的引用错位（\[4] 不支持）—— 校验器能区分 "数据对" 与 "引用错"。
-
-* 已知边界：表格抽取对合并单元格 / 多级表头仍有错位（pdfplumber 工具上限，如 `3,606Triplets+1,836Pairs` 挤在一格）；**无边框表依赖 LLM 判定**（`TABLE_LLM` 开关，无 API Key 时关闭、表格走文本流不丢内容），判定结果未做人工复核基准；引用校验对表格块已给全文，但对超长正文片段仍截断（400 字符），引用结论类断言时可能误判；章节级元数据在个别页识别仍有偏差（如引文页混入正文）。
+> 详细开发过程（含 14 条踩坑记录、每轮实测）见 [`docs/开发日志.md`](docs/开发日志.md)。
