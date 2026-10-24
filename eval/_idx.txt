@@ -1,6 +1,0 @@
-(21, 'nr-01', 'NightRain_Nighttime_Deraining_2401.00729.pdf')
-(22, 'nr-02', 'NightRain_Nighttime_Deraining_2401.00729.pdf')
-(27, 'nr-07', 'NightRain_Nighttime_Deraining_2401.00729.pdf')
-(34, 'ntire-06', 'NTIRE2025_DayNight_Raindrop_2504.12711.pdf')
-(38, 'all-04', None)
-(39, 'all-05', None)

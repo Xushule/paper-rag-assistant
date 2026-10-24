@@ -1,6 +1,0 @@
-ntire-01 | correct=True | NTIRE 2025 挑战赛的任务是**Day and Night Raindrop Removal for Dual-Focused Images**（昼夜双对焦图像去雨滴）[1][5]。该挑战赛基于 Raindrop Clarity D
-ntire-02 | correct=True | NTIRE 2025 挑战赛使用的是 **Raindrop Clarity dataset** [1][2]。该数据集包含 5,442 张白天和 4,712 张夜间的雨滴图像对或三元组 [1]，涵盖 day raindrop-focused
-ntire-03 | correct=True | NTIRE 2025 挑战赛使用三个指标评估恢复图像的质量：PSNR、SSIM 和 LPIPS [1]。其中 PSNR 和 SSIM 是在将图像从 RGB 空间转换到 YCbCr 空间后，在 Y 通道上测量的；LPIPS 则是先将像素值归一
-ntire-04 | correct=True | 根据检索片段，NTIRE 2025 挑战赛共有 75 支队伍提交了结果，最终有 32 支队伍进入最终排名 [1]。  依据是：测试阶段有 75 支队伍向挑战平台提交了结果，竞赛结束时组委会收到了 32 支队伍的事实表和源代码，用于最终排名 
-ntire-05 | correct=True | NTIRE 2025 挑战赛的冠军队伍是 Team Miracle，最终得分 34.3518，排名第 1 [2][6]。该队伍在 PSNR（27.6619）和 SSIM（0.8087）上均取得最高表现，LPIPS 为 0.2794，且未使用
-ntire-06 | correct=False | 根据检索片段，挑战赛数据集划分为训练集、验证集和测试集三部分。训练集包含 4,713 个 triplets，共 14,139 张图像；验证集包含 240 张图像，测试集包含 731 张图像 [1][6]。验证集和测试集被重新组织以保持各种雨
