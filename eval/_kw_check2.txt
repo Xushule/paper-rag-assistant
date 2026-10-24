@@ -1,0 +1,30 @@
+=== nr-01 (n_cit=8) ===
+  [命中] Transformer
+  [缺失] global spatial
+  [缺失] global temporal
+  [缺失] 噪声图
+  [命中] noise map
+=== nr-02 (n_cit=8) ===
+  [缺失] pretrain
+  [缺失] pre-training
+  [缺失] 预训练
+  [缺失] 两个阶段
+  [缺失] two-stage
+  [缺失] 阶段
+=== nr-07 (n_cit=6) ===
+  [缺失] clear video
+  [缺失] 清晰视频
+  [缺失] SynNightRain
+  [命中] 30
+  [缺失] 200
+=== all-04 (n_cit=10) ===
+  [命中] RainMamba
+  [命中] challenge
+  [缺失] 挑战赛
+  [缺失] report
+=== all-05 (n_cit=10) ===
+  [缺失] AGAN
+  [缺失] STRRNet
+  [缺失] attention
+  [缺失] 注意力
+  [缺失] Miracle

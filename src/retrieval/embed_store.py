@@ -125,6 +125,22 @@ class VectorStore:
             kwargs["where"] = where
         return self.collection.query(**kwargs)
 
+    def reset(self) -> None:
+        """清空整个向量库（删除并重建 collection）。
+
+        为什么不用逐 id delete：Chroma 0.6.x 在大批量 delete 后重写
+        HNSW 持久化文件偶发 "Cannot open header file" 崩溃（实测复现），
+        删除重建 collection 是物理级清理，最干净也最稳。
+        """
+        try:
+            self.client.delete_collection("papers")
+        except Exception:
+            pass
+        self.collection = self.client.create_collection(
+            name="papers",
+            metadata={"hnsw:space": "cosine"},
+        )
+
     def count(self) -> int:
         """当前库里的块总数。"""
         return self.collection.count()

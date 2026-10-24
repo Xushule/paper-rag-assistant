@@ -15,3 +15,10 @@ data/bm25.pkl
 data/chunks.pkl
 data/papers/*.pdf
 data/_*.txt
+
+# 评测纯产物（不入库）
+eval/_*.txt
+eval/*.log
+eval/results/*.log
+eval/results/run_log.txt
+eval/results/backup_pre_fullrun/

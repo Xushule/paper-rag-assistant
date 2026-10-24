@@ -79,7 +79,8 @@ def verify_citations(question: str, answer: str, citations: list[dict]) -> list[
     )
     prompt = VERIFY_PROMPT.format(question=question, answer=answer, items=items)
 
-    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
+                    timeout=60, max_retries=1)
     resp = client.chat.completions.create(
         model=LLM_MODEL,
         messages=[{"role": "user", "content": prompt}],

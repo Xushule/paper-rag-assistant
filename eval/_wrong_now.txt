@@ -1,0 +1,4 @@
+判分 43, 对 42, 错 1
+=== all-06 [对比] ===
+MISS: AGAN 额外使用 Google Vision API 做下游识别评测这一要点未被覆盖，系统回答还明确称未找到下游识别评测，与参考答案矛盾。
+A: **结论：** 检索片段中出现的评测指标主要有 PSNR、SSIM、LPIPS 三项，NTIRE2025 报告还额外定义了综合评分 Score 及 Y 通道、Alex 网络等评测口径；各论文具体使用情况如下。  **依据：**  - **AGAN（Attentive GAN）**：使用 PSNR 和 SSIM 两项指标，表中给出各方法（Eigen13、Pix2Pix、A、A+D、A+AD、Ours(AA+AD)）的 PSNR/SSIM 数值 [1]。 - **NightRain**：使用 PSN

@@ -1,0 +1,8 @@
+判分 43, 对 42, 错 1
+=== all-07 [对比] ===
+MISS: AGAN 的数据集未覆盖：参考答案指出 AGAN 使用自己采集的雨滴数据集（Sony A6000/Canon EOS 60），系统回答称未找到；NightRain 的数据集名称未覆盖：参考答案指出使用 SynNightRain 合成数据集加真实夜间视频，系统回答仅提及无标注真实夜间视频和清晰夜间输入视频，未提 SynNightRain 合成数据集。
+A: **结论：** 检索片段中能确认的数据集使用情况如下：Raindrop Clarity 是库内论文 [1] 自建并用于评测的数据集；RobotCar、Qian et al. 的数据集被 [1] 作为对比数据集提及；NTIRE2025 挑战赛报告 [3][6][8] 中，参赛队主要使用组织方提供的 Raindrop Clarity，EntroVision 还额外用了 UAV-Rain1k；NightRain [7][11] 使用无标注真实夜间雨视频和清晰夜间输入视频。其余论文（AGAN [9][12]）的片段中未找到明确的数据集名称。
+
+**依据（按论文/对象分点）：**
+
+1. **Raindrop Clarity 论文 [1]**：自建 daytime 与 nighttime 两套 raindrop 数据集——daytime 共 5,442 对/三元组图像（4,713 训练、729 测试

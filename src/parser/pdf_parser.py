@@ -183,12 +183,15 @@ def extract_pdf_text(pdf_path: str | Path) -> list[PageText]:
     - 用 find_tables() 定位**带边框表**，区域内单词不再走文本平铺
       （否则行列关系丢失，出现 "I1 I2 In I1 I2 In" 式碎片）；
       表格用 extract_table() 抽出行列，转成 Markdown 按 top 插回正文流；
-    - **无边框表补漏（M2.8）**：学术数值表（PSNR/SSIM、排名表）几乎都是
+    - **无边框表补漏（M2.8+）**：学术数值表（PSNR/SSIM、排名表）几乎都是
       无边框对齐表，find_tables() 检测不到。用列对齐启发式定位候选
-      （src/parser/table_align.py），再交给 LLM 判定 + 转 Markdown
-      （src/parser/table_llm.py）；LLM 确认的真表区域同样剔除单词、插回正文流。
+      （src/parser/table_align.py）；**首选坐标级单元格切分**
+      （src/parser/table_cells.py，按单词坐标切出行×列网格，离线确定性），
+      切分不合格的候选再交给 LLM 判定 + 转 Markdown
+      （src/parser/table_llm.py）。LLM 确认的真表区域同样剔除单词、插回正文流。
       误报（结构图/作者/公式/参考文献）由 LLM 兜底为 NOT_TABLE，走文本流。
-    - TABLE_LLM 开关关闭时不做补漏（无 API Key 环境仍可离线解析）。
+    - TABLE_LLM 开关关闭时仅启用坐标切分补漏（无 API Key 环境仍可离线处理
+      规整对齐表）；LLM 兜底路径需要 TABLE_LLM 开启。
     """
     pdf_path = Path(pdf_path)
     pages = []
@@ -205,11 +208,15 @@ def extract_pdf_text(pdf_path: str | Path) -> list[PageText]:
                 raw_words = [w for w in raw_words
                              if not any(_word_in_table(w, t.bbox) for t, _ in real_tables)]
 
-            # 无边框表补漏：候选定位 -> 粗筛 -> LLM 判定/结构化 -> 剔除真表区域单词
+            # 无边框表补漏：候选定位 -> 粗筛 -> 坐标切分 -> LLM 兜底
+            # 第一道用坐标级单元格切分（src/parser/table_cells.py，离线确定性）：
+            #   行容差 3pt / 列区间重叠合并 / 间隙 6pt 切格，直接产出 Markdown，
+            #   不依赖 LLM，且能处理"一行塞两队"这类 LLM 照单全收的错位；
+            # 切分不合格（返回 None）或 LLM 开关开启时，回退原 LLM 判定路径。
             llm_tables = []  # [(bbox, markdown)]
-            if TABLE_LLM and raw_words:
+            if raw_words:
                 from .table_align import detect_aligned_tables
-                from .table_llm import structure_candidates
+                from .table_cells import cells_to_markdown
                 candidates = detect_aligned_tables(raw_words, page.width)
                 kept = []
                 for cand in candidates:
@@ -218,11 +225,39 @@ def extract_pdf_text(pdf_path: str | Path) -> list[PageText]:
                     if real_tables and any(_bbox_overlap(cand.bbox, t.bbox) for t, _ in real_tables):
                         continue
                     kept.append(cand)
-                if kept:
-                    mds = structure_candidates([c.lines for c in kept])
-                    for cand, md in zip(kept, mds):
-                        if md:
-                            llm_tables.append((cand.bbox, md))
+
+                # 候选区域内单词（按 bbox 截取，含 2pt 容差）
+                for cand in kept:
+                    region = [w for w in raw_words
+                              if w["x0"] >= cand.bbox[0] - 2 and w["x1"] <= cand.bbox[2] + 2
+                              and w["top"] >= cand.bbox[1] - 2 and w["bottom"] <= cand.bbox[3] + 2]
+                    md = cells_to_markdown(region)
+                    if md:
+                        llm_tables.append((cand.bbox, md))
+
+                # 坐标切分失败/不合格的候选，交给 LLM 判定 + 结构化
+                if TABLE_LLM:
+                    from .table_llm import structure_candidates
+                    llm_cands = [cand for cand in kept
+                                 if not any(bb == cand.bbox for bb, _ in llm_tables)]
+                    # 公式区不进 LLM 兜底：扩散模型方程（√ α ϵ 等符号密集）
+                    # 常被 LLM 误判为 TABLE 污染检索；数学符号密度高的候选直接
+                    # 走文本流，与 cells_to_markdown 的符号规则保持一致。
+                    def _math_dense(cand) -> bool:
+                        texts = [w["text"] for w in raw_words
+                                 if cand.bbox[0] - 2 <= w["x0"] <= cand.bbox[2] + 2
+                                 and cand.bbox[1] - 2 <= w["top"] <= cand.bbox[3] + 2]
+                        if len(texts) < 4:
+                            return False
+                        sym = sum(1 for t in texts if re.search(r"[√∑∫∈αβγϵ¯·×]", t))
+                        return sym / len(texts) >= 0.3
+                    llm_cands = [c for c in llm_cands if not _math_dense(c)]
+                    if llm_cands:
+                        mds = structure_candidates([c.lines for c in llm_cands])
+                        for cand, md in zip(llm_cands, mds):
+                            if md:
+                                llm_tables.append((cand.bbox, md))
+
                 if llm_tables:
                     raw_words = [w for w in raw_words
                                  if not any(_word_in_table(w, bbox) for bbox, _ in llm_tables)]

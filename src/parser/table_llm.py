@@ -53,7 +53,8 @@ def structure_candidates(candidates: list[list[str]]) -> list[str | None]:
     """
     if not candidates:
         return []
-    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
+                    timeout=60, max_retries=1)
     resp = client.chat.completions.create(
         model=LLM_MODEL,
         messages=[{"role": "user", "content": TABLE_PROMPT.format(blocks=_build_blocks(candidates))}],

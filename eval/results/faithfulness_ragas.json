@@ -1,0 +1,182 @@
+{
+  "metric": "faithfulness (ragas 官方)",
+  "n": 43,
+  "n_valid": 39,
+  "mean_faithfulness": 0.3942,
+  "hallucination_rate_approx": 0.6058,
+  "skipped_no_context": [],
+  "per_sample": [
+    {
+      "question": "Raindrop Clarity 数据集总共包含多少对或三元组图像？",
+      "faithfulness": 1.0
+    },
+    {
+      "question": "Raindrop Clarity 数据集中白天和夜间各有多少图像对？",
+      "faithfulness": 0.6
+    },
+    {
+      "question": "Raindrop Clarity 数据集包含哪四种图像条件？",
+      "faithfulness": 0.3846
+    },
+    {
+      "question": "Raindrop Clarity 相比现有去雨数据集的主要创新点是什么？",
+      "faithfulness": 0.75
+    },
+    {
+      "question": "Raindrop Clarity 数据集使用了哪些采集设备？",
+      "faithfulness": 0.3333
+    },
+    {
+      "question": "Raindrop Clarity 的训练集和测试集是如何划分的？",
+      "faithfulness": 0.1429
+    },
+    {
+      "question": "Raindrop Clarity 数据集包含哪些遮挡类型？",
+      "faithfulness": 0.0
+    },
+    {
+      "question": "Raindrop Clarity 数据集在哪里可以获取？",
+      "faithfulness": 0.0
+    },
+    {
+      "question": "Raindrop Clarity 中的三元组（triplet）数据包含哪三张图像",
+      "faithfulness": 0.8333
+    },
+    {
+      "question": "现有去雨数据集有什么主要缺点？",
+      "faithfulness": 0.25
+    },
+    {
+      "question": "Raindrop Clarity 数据集覆盖了哪些场景？",
+      "faithfulness": 0.1875
+    },
+    {
+      "question": "Raindrop Clarity 是如何采集雨滴图像的？",
+      "faithfulness": 0.0769
+    },
+    {
+      "question": "为什么 Raindrop Clarity 要加入夜间数据？",
+      "faithfulness": 0.3846
+    },
+    {
+      "question": "AGAN 这篇论文提出的是什么方法？",
+      "faithfulness": 0.25
+    },
+    {
+      "question": "AGAN 的注意力图是如何生成和使用的？",
+      "faithfulness": 0.4545
+    },
+    {
+      "question": "AGAN 使用了哪些损失函数？",
+      "faithfulness": 0.5333
+    },
+    {
+      "question": "AGAN 论文的数据集是如何采集的？",
+      "faithfulness": 0.2222
+    },
+    {
+      "question": "AGAN 完整方法（AA+AD）在雨滴数据集上的 PSNR 和 SSIM 是多少",
+      "faithfulness": 0.5556
+    },
+    {
+      "question": "AGAN 论文的消融实验包含哪些配置？",
+      "faithfulness": 0.3636
+    },
+    {
+      "question": "AGAN 与 Eigen 方法和 Pix2Pix 相比效果如何？",
+      "faithfulness": null
+    },
+    {
+      "question": "AGAN 对下游视觉任务有什么提升？",
+      "faithfulness": 0.0
+    },
+    {
+      "question": "NightRain 提出的是什么任务和方法？",
+      "faithfulness": 0.4545
+    },
+    {
+      "question": "NightRain 由哪几个部分组成？",
+      "faithfulness": 0.7
+    },
+    {
+      "question": "NightRain 的自适应校正（adaptive-correction）是什么",
+      "faithfulness": 0.2222
+    },
+    {
+      "question": "NightRain 在夜间去雨测试集上的 PSNR 和 SSIM 是多少？",
+      "faithfulness": 1.0
+    },
+    {
+      "question": "NightRain 相比 FDM 提升了多少？",
+      "faithfulness": 1.0
+    },
+    {
+      "question": "现有夜间视频去雨方法存在什么问题？",
+      "faithfulness": 0.2
+    },
+    {
+      "question": "NightRain 使用了什么数据集？",
+      "faithfulness": 0.1667
+    },
+    {
+      "question": "为什么 NightRain 选择基于 Transformer 的扩散模型？",
+      "faithfulness": 0.5
+    },
+    {
+      "question": "NTIRE 2025 挑战赛的任务是什么？",
+      "faithfulness": 0.3333
+    },
+    {
+      "question": "NTIRE 2025 挑战赛使用了什么数据集？",
+      "faithfulness": 0.125
+    },
+    {
+      "question": "NTIRE 2025 挑战赛用哪些指标评估？",
+      "faithfulness": 0.0
+    },
+    {
+      "question": "NTIRE 2025 挑战赛有多少队伍提交结果、多少队进入最终排名？",
+      "faithfulness": 0.3333
+    },
+    {
+      "question": "NTIRE 2025 挑战赛冠军队伍是谁，成绩如何？",
+      "faithfulness": 0.8
+    },
+    {
+      "question": "挑战赛的训练集和验证/测试集如何划分？",
+      "faithfulness": 0.1
+    },
+    {
+      "question": "这个库里一共有几篇论文？",
+      "faithfulness": 0.2
+    },
+    {
+      "question": "对比一下这四篇论文有什么不同？",
+      "faithfulness": null
+    },
+    {
+      "question": "AGAN 和 NightRain 的方法有什么不同？",
+      "faithfulness": 0.75
+    },
+    {
+      "question": "这四篇论文里哪些是提出方法的，哪些是数据集的？",
+      "faithfulness": 0.5833
+    },
+    {
+      "question": "这些论文里有哪些去雨方法？",
+      "faithfulness": null
+    },
+    {
+      "question": "这些论文都用了什么评测指标？",
+      "faithfulness": 0.25
+    },
+    {
+      "question": "这些论文各自使用了什么数据集？",
+      "faithfulness": null
+    },
+    {
+      "question": "这些论文研究的共同问题是什么？",
+      "faithfulness": 0.3333
+    }
+  ]
+}

@@ -47,7 +47,8 @@ RERANK_PROMPT = """你是检索精排器。判断每个候选片段与用户问�
 def _call_llm(query: str, documents: list[str]) -> list[tuple[int, float]]:
     """LLM 打分：一次请求对所有候选输出 JSON 分数。"""
     items = "\n".join(f"[{i}] {doc[:MAX_CHARS]}" for i, doc in enumerate(documents))
-    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
+                    timeout=60, max_retries=1)
     resp = client.chat.completions.create(
         model=LLM_MODEL,
         messages=[{"role": "user", "content": RERANK_PROMPT.format(query=query, items=items)}],

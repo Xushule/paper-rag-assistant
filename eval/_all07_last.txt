@@ -1,0 +1,20 @@
+judge: {"correct": false, "missing": "NightRain 的数据集要点遗漏：参考答案指出 NightRain 使用 SynNightRain 合成数据集加真实夜间视频，系统回答仅称使用无标注真实夜间视频且未找到具名数据集，未覆盖 SynNightRain 合成数据集这一要点。"}
+answer: **结论：** 检索片段中能确认的数据集使用情况如下（按论文分列）；部分论文的片段未提及其训练/评测数据集，只能标注"检索片段中未找到"。
+
+**一、Raindrop Clarity（提出数据集/基准的论文）[1][5]**
+- 自建 **Raindrop Clarity** 数据集，分 Daytime 与 Nighttime 两部分：白天 5,442 对/三元组图像（训练 4,713、测试 729）；夜间 9,744 对/三元组（训练 8,655、评测 1,089）[1]。
+- 作为对比还提到已有数据集：**RobotCar**（4,818 图像对）[1][5]、**Qian et al. 的数据集**（861 训练对 + 58 测试对）[1]。
+- 在该数据集上重训练了 IDT、RDiffusion、RainDS、Robot Car、AtGAN 及 Restormer、Uformer、DiT 等基线 [1]。
+
+**二、AGAN（Attentive GAN 去雨滴）[3]**
+- 因当时没有"雨滴附着在玻璃窗/镜头上"的数据集，作者**自建数据集**：用两块玻璃（一块喷水、一块干净）拍摄，共 **1,119 对图像**，设备为 Sony A6000 与 Canon EOS 60 [3]。
+
+**三、NightRain（夜间视频去雨）[8]**
+- 使用**无标注的真实夜间雨视频**（unlabeled rain videos）做自适应去雨，并用清晰的夜间输入训练视频做自适应校正；片段未给出具体数据集名称，**检索片段中未找到**具名数据集。
+
+**四、NTIRE2025 昼
+
+snippet[sony]: 缺失
+snippet[a6000]: 缺失
+snippet[eos]: 缺失
+snippet[synnightrain]: 缺失

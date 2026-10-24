@@ -1,0 +1,10 @@
+[1] | Teams | Leader | Final Score↑ | PSNR↑ | SSIM↑ | LPIPS↓ | Params. (M) | MIRACLE ENTROVISION
+[2] 4.29. QWE Miracle This team develops their method upon the previous ba | TRANSWEATHER MIRACLE
+[3] 4608 | 25.4251 | 0.7509 | 0.2946 | 34.49 | 119 | ⊗ | ⊗ | 15 | | RainDr | 
+[4] NTIRE 2025 Challenge on Day and Night Raindrop Removal for Dual-Focuse | 
+[5] 12, 14, 69, 114] and restoration tasks [38, 39, 41, 44]. This team pro | STRRNET RESTORMER
+[6] Van Gool, Radu Timo- 12978–12995, 2022. 2 fte, Yawei Li, et al. The te | 
+[7] n and testing the score in Eq. 1. In the test stage, 75 teams submitte | 
+[8] tps://cvlai.net/ntire/2025/ https : / / codalab . lisn . performance o | 
+[9] gnition (CVPR) Workshops, 2025. 3 Zongwei Wu, Radu Timofte, et al. NTI | 
+[10] In European Conference on Computer Proceedings of the IEEE/CVF Confere | 

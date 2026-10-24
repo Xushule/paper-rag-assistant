@@ -46,7 +46,7 @@ QUERY_EXPAND = os.getenv("QUERY_EXPAND", "1") == "1"
 # 多样化的，再交给 LLM 精排。解决全库对比时候选被少数论文垄断（实测问"这里有几篇
 # 论文"时 NightRain 0 块进候选）。关闭后走原链路（RRF -> 直接精排）
 MMR_ENABLED = os.getenv("MMR_ENABLED", "1") == "1"
-MMR_TOP_K = int(os.getenv("MMR_TOP_K", "8"))   # MMR 从 RRF top12 里选几个进精排
+MMR_TOP_K = int(os.getenv("MMR_TOP_K", "10"))  # MMR 从 RRF top20 里选几个进精排
 MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.7"))  # 相关度权重；越小越重多样性
 
 # ---------- LLM（M2 问答接口才用，先预留） ----------

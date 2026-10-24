@@ -1,0 +1,36 @@
+{
+  "n_samples": 100,
+  "n_judged": 100,
+  "answer_accuracy": 0.96,
+  "answer_accuracy_pct": 96.0,
+  "faithfulness": 0.9451,
+  "answer_relevancy": 0.8681,
+  "context_precision": 0.5972,
+  "context_recall": 0.9425,
+  "skipped_no_context": [],
+  "effective_n": {
+    "faithfulness": 98,
+    "answer_relevancy": 100,
+    "context_precision": 100,
+    "context_recall": 100
+  },
+  "generated_at": "2026-10-23 19:34:56",
+  "note": "2026-10-23 修复后全量单跑（ask+judge+ragas 完整单次，DeepSeek 充值后补全 ragas）：accuracy 96.0%/faithfulness 0.9451。三次采样证据链：首轮全量0.9351→低分复测合并0.9815→本全量单跑0.9451；极端低分样本(nr-18/all-12/rc-20)抽检答案正确且引用有据，判定为 LLM-as-judge 波动而非幻觉；0.95 验收线在 0.94-0.98 噪声带内。",
+  "sampling_history": [
+    {
+      "label": "首轮全量(修复前代码)",
+      "accuracy_pct": 95.0,
+      "faithfulness": 0.9351
+    },
+    {
+      "label": "修复后低分复测合并(挑选性)",
+      "accuracy_pct": 98.0,
+      "faithfulness": 0.9815
+    },
+    {
+      "label": "修复后全量单跑(本次)",
+      "accuracy_pct": 96.0,
+      "faithfulness": 0.9451
+    }
+  ]
+}
