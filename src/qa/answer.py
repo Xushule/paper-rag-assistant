@@ -520,32 +520,40 @@ class QASystem:
         for c in self.chunks:
             by_source.setdefault(c.source, []).append(c)
 
-        # 2) 每篇选代表块：优先标题页，其次摘要/引言块，否则第一个块
-        def pick_rep(chunks):
-            page1 = [c for c in chunks if c.page == 1]
-            if page1:
-                return page1[0]
-            for kw in ("abstract", "introduction", "summary", "摘要", "引言"):
-                hit = [c for c in chunks if kw in c.section.lower()]
-                if hit:
-                    return hit[0]
-            return chunks[0]
+        # 2) 每篇选代表块：优先标题页，其次摘要/引言块；选 3 个信息量最高的块
+        def pick_reps(chunks, n=3):
+            def rank(c):
+                s = c.section.lower()
+                score = 0
+                if c.page == 1:
+                    score += 100
+                for kw in ("abstract", "introduction", "summary", "摘要", "引言"):
+                    if kw in s:
+                        score += 50
+                if len(c.content) > 300:
+                    score += 5  # 内容充实，避免空块
+                return -score, c.chunk_id
+            ordered = sorted(chunks, key=rank)
+            return ordered[:n]
 
         sources = sorted(by_source)
-        reps = {s: pick_rep(by_source[s]) for s in sources}
+        reps_map = {s: pick_reps(by_source[s]) for s in sources}
 
         # 3) 组装"论文清单"prompt，LLM 只需基于清单回答（不编造清单外的论文）
         lines = []
         for i, s in enumerate(sources, start=1):
-            rep = reps[s]
-            lines.append(
-                f"[{i}] 文件名: {s}（库内 {len(by_source[s])} 个检索块）\n"
-                f"代表片段: {rep.content[:400]}"
-            )
+            seg = f"[{i}] 文件名: {s}（库内 {len(by_source[s])} 个检索块）\n"
+            for j, rep in enumerate(reps_map[s], start=1):
+                seg += f"代表片段{j}: {rep.content[:500]}\n"
+            lines.append(seg)
         prompt = (
-            "以下是语料库中的全部论文清单（每篇附代表片段）。请回答用户关于"
-            "论文库本身的问题（共几篇/有哪些/有没有某方向论文等），"
-            "用 [编号] 引用对应论文。中文回答，先给结论。\n\n"
+            "以下是语料库中的全部论文清单（每篇附 1-2 个代表片段：标题页/摘要/引言或方法）。\n"
+            "请回答用户关于论文库本身的问题（共几篇/有哪些/有没有某方向论文等），"
+            "用 [编号] 引用对应论文。要求：\n"
+            "1. 先给结论（共几篇、主题），再逐篇概述。\n"
+            "2. 每篇论文概述 3-5 句：①任务/要解决的问题 ②提出的方法或核心贡献 "
+            "③关键数据或实验结论 ④与库内其他论文的关系（同类/互补/被对比等）。\n"
+            "3. 只根据清单信息回答，不编造清单之外的论文或细节。中文回答。\n\n"
             + "\n\n".join(lines)
             + f"\n\n【用户问题】\n{question}"
         )
@@ -557,14 +565,14 @@ class QASystem:
                 {"role": "user", "content": prompt},
             ],
             temperature=0.2,
-            max_tokens=800,
+            max_tokens=1500,
         )
         answer = resp.choices[0].message.content.strip()
 
         # 4) 引用 + 校验（复用 posthoc attribution；表格/References 块 snippet 给全文）
         citations = []
         for i, s in enumerate(sources, start=1):
-            rep = reps[s]
+            rep = reps_map[s][0]
             citations.append({
                 "chunk_id": rep.chunk_id,
                 "source": rep.source,
