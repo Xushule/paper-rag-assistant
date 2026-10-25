@@ -20,6 +20,7 @@ from openai import OpenAI
 
 from ..config import (LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, QUERY_EXPAND,
                       MMR_ENABLED, MMR_TOP_K, MMR_LAMBDA)
+from .attribution import needs_full_snippet
 
 SYSTEM_PROMPT = """你是一位严谨的论文阅读助手。请根据【检索片段】回答用户问题，规则如下：
 1. 只依据片段中的信息回答；片段里没有的内容，明确说"检索片段中未找到"。
