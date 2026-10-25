@@ -392,7 +392,7 @@ class QASystem:
             (answer, citations, verification)
             citations 与 [n] 一一对应（含 snippet / 章节 / 页码 / verdict）。
         """
-        from .attribution import verify_citations
+        from .attribution import verify_citations, needs_full_snippet
 
         context_lines = []
         citations = []
@@ -400,15 +400,16 @@ class QASystem:
             context_lines.append(
                 f"[{i}] (来源: {chunk.source}, 章节: {chunk.section}, 第{chunk.page}页)\n{chunk.content}"
             )
-            # 表格块（Markdown 表格）的 snippet 给全文，否则校验器看不到
-            # 截断点之后的关键数据行（如 Ours 31.57），会把"支持"误判成"不支持"
-            is_table = "|" in chunk.content and chunk.content.count("|") >= 4
+            # 表格块 / References 块的 snippet 给全文，否则校验器看不到
+            # 截断点之后的关键内容（表格数据行、引文列表后部名字），
+            # 会把"支持"误判成"不支持"（AGAN 表 1、RC 参考文献实测）
             citations.append({
                 "chunk_id": chunk.chunk_id,
                 "source": chunk.source,
                 "section": chunk.section,
                 "page": chunk.page,
-                "snippet": chunk.content if is_table else chunk.content[:400],
+                "snippet": chunk.content if needs_full_snippet(chunk.content, chunk.section)
+                else chunk.content[:400],
             })
 
         prompt_parts = ["【检索片段】\n" + "\n\n".join(context_lines)]
@@ -559,11 +560,10 @@ class QASystem:
         )
         answer = resp.choices[0].message.content.strip()
 
-        # 4) 引用 + 校验（复用 posthoc attribution；表格块 snippet 给全文）
+        # 4) 引用 + 校验（复用 posthoc attribution；表格/References 块 snippet 给全文）
         citations = []
         for i, s in enumerate(sources, start=1):
             rep = reps[s]
-            is_table = "|" in rep.content and rep.content.count("|") >= 4
             citations.append({
                 "chunk_id": rep.chunk_id,
                 "source": rep.source,
@@ -574,7 +574,8 @@ class QASystem:
                 # 而 rep.content 是标题页正文、不含文件名——没有 filename 时 ragas
                 # faithfulness 会把这些断言判为无上下文支持（all-15 曾 0.0）。
                 "filename": rep.source,
-                "snippet": rep.content if is_table else rep.content[:400],
+                "snippet": rep.content if needs_full_snippet(rep.content, rep.section)
+                else rep.content[:400],
             })
         verification = None
         try:

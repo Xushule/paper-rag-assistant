@@ -24,17 +24,32 @@ from ..config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL
 # 每条片段送入校验器的最大字符数（回答通常 3-6 句，5 条 × 400 字 ≈ 2.5K tokens）
 MAX_CHARS = 400
 
+# References 章节名（大小写不敏感）
+REF_SECTION_RE = re.compile(r"reference", re.IGNORECASE)
+
+
+def needs_full_snippet(content: str, section: str = "") -> bool:
+    """校验用片段是否需要给全文：表格块 / References 块。
+
+    背景（两处真实踩坑）：
+    - Markdown 表格块可能 600~1300 字符，截断 400 后关键数据行
+      （如 Ours 31.57）落在截断点之后，校验器把"支持"误判成"不支持"；
+    - References 块更长（实测 665~1787 字符），截断后列表后部的
+      引文名（RainDiffusion / Uformer / SwinIR 等）看不到，
+      回答说"参考文献提及 XX"时被误判为 unsupported。
+    """
+    if "|" in content and content.count("|") >= 4:
+        return True  # 表格块给全文
+    if section and REF_SECTION_RE.search(section):
+        return True  # References 块给全文
+    return False
+
 
 def _snippet(c: dict) -> str:
-    """校验用片段文本：普通片段截断，表格块给全文。
-
-    背景：Markdown 表格块可能 600~1300 字符，若截断 400 字符，
-    关键数据行（如 Ours 31.57）落在截断点之后，校验器看不到
-    就会把"支持"误判成"不支持"（真实踩坑，AGAN 表 1 实测）。
-    """
+    """校验用片段文本：普通片段截断，表格块 / References 块给全文。"""
     text = c.get("snippet", "") or ""
-    if "|" in text and text.count("|") >= 4:
-        return text  # 表格块给全文
+    if needs_full_snippet(text, c.get("section", "")):
+        return text  # 表格 / References 块给全文
     return text[:MAX_CHARS]
 
 VERIFY_PROMPT = """你是论文回答的引用校验器（posthoc attribution）。
