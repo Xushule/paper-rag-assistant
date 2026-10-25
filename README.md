@@ -96,7 +96,7 @@ RAG 对 "语料库元问题" 有结构性盲区 —— 论文正文不会写 "�
 
 
 
-* **引用校验（posthoc attribution，OpenScholar 同款）**：逐条核对回答中每个 `[n]` 引用支撑的断言是否真的被对应片段支持，输出 supported /partial/unsupported 与理由；**表格块与 References 块给全文**（截断会把关键数据行、引文列表后部的名字误判为"不支持"——两个真实踩坑）
+* **引用校验（posthoc attribution，OpenScholar 同款）**：逐条核对回答中每个 `[n]` 引用支撑的断言是否真的被对应片段支持，输出 supported /partial/unsupported 与理由；**表格块与 References 块给全文**（截断会把关键数据行、引文列表后部的名字误判为"不支持"——两个真实踩坑）；支持**分类断言**（"这是参考文献列表"、"这是被评估的基线而非提出的方法"——片段性质吻合即 supported，性质不符照拒）
 
 * **self-correction**：校验发现证据不足 → LLM 构造补充查询 → 再检索合并证据 → 重新生成并再校验（最多 1 轮，防无限循环）
 
