@@ -210,6 +210,19 @@ python -m uvicorn api.main:app --port 8000    # 打开 http://127.0.0.1:8000
 
 CLI 交互模式：`/papers` 列出论文、`/paper <关键词>` 锁定单篇、`/all` 全库对比、`/reset` 清空历史。
 
+### Docker 一键启动（可选）
+
+前置：宿主机已装并启动 **Ollama**（拉好 `bge-m3` 模型）、已配置 **DeepSeek Key**（`.env` 或系统环境变量）。
+
+```
+docker compose up --build -d     # 构建并启动，打开 http://localhost:8000
+docker compose down              # 停止
+```
+
+- 容器经 `host.docker.internal:11434` 访问宿主机的 Ollama（embedding 仍走本地，不占 API 额度）
+- `./data` 目录挂载进容器：论文 PDF / 向量库 / BM25 索引与裸机部署共用，无需重建索引
+- 镜像只装运行时依赖（`requirements-runtime.txt`）；评测依赖（ragas/datasets）留在本地 conda 环境
+
 
 
 ***

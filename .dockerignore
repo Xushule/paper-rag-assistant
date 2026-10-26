@@ -1,0 +1,10 @@
+# 构建上下文排除：镜像只含代码，不含数据/密钥/版本历史
+.git
+.env
+data/
+eval/results/
+eval/*.log
+**/__pycache__/
+*.pyc
+*.pyo
+.venv/

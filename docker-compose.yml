@@ -1,0 +1,28 @@
+# 论文阅读问答助手 — 一键启动
+# 前置：宿主机已装并启动 Ollama（bge-m3 模型）、已配 DeepSeek Key（.env 或环境变量）
+# 用法：docker compose up --build -d   → 浏览器打开 http://localhost:8000
+# 停止：docker compose down
+services:
+  web:
+    build: .
+    container_name: paper-rag-assistant
+    ports:
+      - "8000:8000"
+    volumes:
+      # 数据卷：论文 PDF / 向量库 / BM25 / 分块缓存持久化在宿主机 data/（与裸机部署共用）
+      - ./data:/app/data
+    environment:
+      # LLM Key：优先取宿主机 .env 的 LLM_API_KEY，没有则用系统 Deepseek_Key
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      Deepseek_Key: ${Deepseek_Key:-}
+      # 容器内访问宿主机 Ollama（Windows/Mac Docker Desktop 内置 host.docker.internal；
+      # Linux 由 extra_hosts 兜底）
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
+      EMBED_PROVIDER: ollama
+      EMBED_MODEL: bge-m3
+      RERANK_MODE: llm
+      QUERY_EXPAND: "1"
+      MMR_ENABLED: "1"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

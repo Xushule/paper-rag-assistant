@@ -1,0 +1,12 @@
+# 运行时最小依赖（Docker 镜像用）：不含评测依赖（ragas/datasets 体积大且仅本地评测需要）
+pypdf
+pdfplumber
+python-docx
+chromadb==0.6.3
+rank-bm25
+requests
+python-dotenv
+fastapi
+uvicorn
+pydantic
+openai
