@@ -38,8 +38,11 @@ from src.retrieval.embed_store import VectorStore
 
 app = FastAPI(title="论文阅读问答助手 API", version="0.4.0")
 
-# 文件名白名单：只允许常规 PDF 文件名，杜绝路径穿越（../、绝对路径等）
-_SAFE_NAME = re.compile(r"^[A-Za-z0-9_\-\u4e00-\u9fff]+\.pdf$")
+# 文件名白名单：只允许常规 PDF 文件名，杜绝路径穿越（../、绝对路径等）。
+# 允许点号（arXiv 编号 "Restormer_2111.09839.pdf" 自带点号）；点号前后必须有
+# 合法字符（"[A-Za-z0-9_...]+\.[...]+"），".."、"..pdf"、"../x" 均无法匹配。
+_SAFE_NAME = re.compile(
+    r"^[A-Za-z0-9_\-\u4e00-\u9fff]+(\.[A-Za-z0-9_\-\u4e00-\u9fff]+)*\.pdf$")
 
 
 class QARequest(BaseModel):
