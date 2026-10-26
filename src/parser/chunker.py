@@ -64,9 +64,12 @@ def _looks_like_heading(line: str) -> bool:
         return False
     if NUM_HEADING.match(line) or CN_NUM_HEADING.match(line):
         return True
-    # 无编号标题：命中白名单关键词，且是词边界（避免 "Background-focused" 误命中 "background"）
+    # 无编号标题：整行精确等于白名单词（允许尾部标点），避免
+    # "Background-focused" 误命中 "background"、"approach leads to effective
+    # deraining while simultaneously" 这类以白名单词开头的正文句子被误判为标题
+    # （句子 40~60 字符、以句号结尾，整行匹配自然排除）
     return any(
-        re.match(rf"^{re.escape(kw)}(\s|[:：]|$)", low)
+        re.match(rf"^{re.escape(kw)}[.:：]?$", low)
         for kw in KNOWN_HEADING_WORDS
     )
 
@@ -76,6 +79,32 @@ def _looks_like_heading(line: str) -> bool:
 TABLE_CAPTION = re.compile(r"(Table|表)\s*\d")
 
 
+def _heading_level(title: str) -> int:
+    """从编号推断标题层级：'3.2 Method' → 2 级；'3.2.1 X' → 3 级；无编号 → 1 级。
+
+    用于维护标题栈：深层标题切出的块要带完整父级路径
+    （'2 Related Work > 2.1 Data > 2.1.3 X > 2.1.3.2 Y'）。
+    """
+    m = re.match(r"^\s*(\d+(\.\d+)*)", title)
+    if m:
+        return m.group(1).count(".") + 1
+    return 1
+
+
+def _is_numbered_ancestor(prev_title: str, cur_title: str) -> bool:
+    """prev_title 是否为 cur_title 的编号祖先（'4' ⊃ '4.2'；'3.2' ⊃ '3.2.1'）。
+
+    防止错挂：识别不到中间层标题时（如 "3 Dataset" 没被识别），
+    "3.2 Characteristics" 不能挂到无关的 "2 Related Work" 下面——
+    宁可不挂（块只有自身标题），也不挂错（引用时显示错误父级）。
+    """
+    m1 = re.match(r"^(\d+(\.\d+)*)", prev_title)
+    m2 = re.match(r"^(\d+(\.\d+)*)", cur_title)
+    if not m1 or not m2:
+        return False
+    return cur_title.startswith(m1.group(1) + ".")
+
+
 def split_into_sections(pages: list[PageText]) -> list[tuple[str, str, int]]:
     """把多页文本按标题切分成 [(章节名, 章节文本, 起始页)]。
 
@@ -83,12 +112,17 @@ def split_into_sections(pages: list[PageText]) -> list[tuple[str, str, int]]:
     不与正文混在一起——否则表格块被正文稀释，检索"表 1 的数值"
     时表格块排名靠后、答不准（真实踩坑）。
     表格前面的说明行（"Table 1. ..."）并入表格块，作为检索锚点。
+
+    标题层级（标题栈）：章节名存"一级 > 二级 > ... > 当前级"完整路径。
+    四级标题切出的块能看到它的一/二/三级父标题（检索片段自包含、
+    引用溯源精确到章）。
     """
     def is_table_row(line: str) -> bool:
         s = line.strip()
         return s.startswith("|") and s.count("|") >= 2
 
     sections = []
+    heading_stack: list[tuple[int, str]] = []  # [(level, title), ...]
     current_title = "前言/未分区"
     current_lines = []  # [(page_no, line), ...]
 
@@ -137,9 +171,26 @@ def split_into_sections(pages: list[PageText]) -> list[tuple[str, str, int]]:
                 else:  # 零星表格碎片归回正文流
                     current_lines.extend(tbl)
                 continue
-            if _looks_like_heading(line):
+            # References 章节内数字开头的行（参考文献条目 "14 In ECCV, ..."、
+            # "31. Wang, ..."）不做标题——否则 References 被条目行分裂成多个
+            # "伪章节"，后续块 section 丢失 reference 标识、校验全文逻辑失效
+            in_refs = "reference" in current_title.lower()
+            if _looks_like_heading(line) and not (in_refs and re.match(r"^\s*\d", line)):
                 flush_body()
-                current_title = line.strip()
+                title = line.strip()
+                level = _heading_level(title)
+                # 弹掉同级或更深的兄弟标题，保留父级："3.2" 出现时清掉 "3.1.x"；
+                # 新一级标题（如 Introduction）出现时清空整栈
+                while heading_stack and heading_stack[-1][0] >= level:
+                    heading_stack.pop()
+                # 编号子标题要求栈顶是它的编号祖先（"4.2" 的父级必须是 "4"），
+                # 识别不到中间层标题时宁可让块只有自身标题，也不挂错父级
+                while heading_stack and _is_numbered_ancestor(
+                        heading_stack[-1][1], title) is False \
+                        and heading_stack[-1][0] < level:
+                    heading_stack.pop()
+                heading_stack.append((level, title))
+                current_title = " > ".join(t for _, t in heading_stack)
                 current_lines = [(page.page_no, line)]
             else:
                 current_lines.append((page.page_no, line))
