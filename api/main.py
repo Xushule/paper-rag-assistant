@@ -48,6 +48,7 @@ _SAFE_NAME = re.compile(
 class QARequest(BaseModel):
     question: str
     paper: str | None = None  # 论文作用域（PDF 文件名，见 /api/papers）；None=全库
+    session_id: str | None = None  # 会话标识；同一会话共享多轮历史，不同会话隔离
 
 
 class QAResponse(BaseModel):
@@ -124,7 +125,9 @@ def qa_endpoint(req: QARequest) -> QAResponse:
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="question 不能为空")
     try:
-        result = _get_qa().ask(req.question, scope=req.paper)
+        # session_id 缺省为 "default"：兼容 CLI/旧客户端（单会话共享历史）
+        result = _get_qa().ask(req.question, scope=req.paper,
+                               session=req.session_id or "default")
     except Exception as e:  # 网络/超时等统一返回 502，便于前端识别
         raise HTTPException(status_code=502, detail=f"问答服务出错: {e}")
     return QAResponse(**result)

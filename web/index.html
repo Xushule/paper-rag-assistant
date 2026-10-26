@@ -343,6 +343,15 @@
     }
   }
 
+  // 会话隔离：每个页面实例一个随机 session_id（刷新页面即开新会话），
+  // 同一页内的多轮 follow-up 共享历史、不同页面/标签互不串台。
+  var sessionId = (function () {
+    try {
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+      return 's-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    } catch (e) { return 's-' + Date.now(); }
+  })();
+
   function ask(question) {
     var paper = $('paper-select').value;
     $('send-btn').disabled = true;
@@ -350,7 +359,7 @@
     fetch('/api/qa', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: question, paper: paper || null })
+      body: JSON.stringify({ question: question, paper: paper || null, session_id: sessionId })
     }).then(function (r) {
       if (!r.ok) return r.json().then(function (e) { throw new Error(e.detail || r.statusText); });
       return r.json();

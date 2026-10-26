@@ -116,11 +116,16 @@ class QASystem:
             raise RuntimeError("未配置 LLM_API_KEY（.env），无法调用 LLM")
         self.client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
                               timeout=60, max_retries=1)
-        self.history: list[dict] = []
+        # 会话隔离：session -> 对话历史。CLI/脚本不传 session 时落到 "default"，
+        # 行为与旧的单一 self.history 完全一致（单会话兼容）。
+        self.histories: dict[str, list[dict]] = {}
 
-    def reset_history(self) -> None:
-        """清空对话历史。"""
-        self.history = []
+    def reset_history(self, session: str | None = None) -> None:
+        """清空对话历史。session 为 None 时清空全部会话（写库后调用）。"""
+        if session is None:
+            self.histories.clear()
+        else:
+            self.histories.pop(session, None)
 
     def papers(self) -> list[str]:
         """库内已有的论文（去重、按文件名排序），用于作用域选择。"""
@@ -168,7 +173,8 @@ class QASystem:
     def _retrieve(self, question: str, top_k: int, scope: str | None,
                   vector_k: int = 12, bm25_k: int = 12,
                   final_k: int = 20, rerank_top: int = 16,
-                  use_history: bool = True, expand: bool = True) -> list:
+                  use_history: bool = True, expand: bool = True,
+                  history: list | None = None) -> list:
         """多路检索 + 跨路 RRF 融合 + LLM 精排。
 
         主查询 + LLM 扩展查询各走一路混合检索（向量 + BM25），
@@ -188,13 +194,14 @@ class QASystem:
 
         # 2) 每路混合检索，记录 (chunk, 该路内排名)
         all_hits = []
+        hist = self.histories.get("default", []) if history is None else history
         for i, q in enumerate(queries):
             bm25_query = expand_query(q)
             vector_query = q
-            if use_history and i == 0 and self.history:
+            if use_history and i == 0 and hist:
                 # 拼接最近一轮问题：follow-up 常省略主语/对象，两问并排编码
                 # 能让向量检索同时命中上一轮和本轮的相关片段
-                vector_query = f"{self.history[-1]['question']} {q}"
+                vector_query = f"{hist[-1]['question']} {q}"
             hits = hybrid_search(
                 self.store, self.bm25, self.chunks,
                 query=vector_query, bm25_query=bm25_query,
@@ -386,7 +393,8 @@ class QASystem:
     # 生成 + 校验
     # ------------------------------------------------------------------
     def _generate(self, question: str, hits: list,
-                  include_history: bool = True) -> tuple:
+                  include_history: bool = True,
+                  history: list | None = None) -> tuple:
         """组装片段 -> 生成回答 -> 引用校验。
 
         Returns:
@@ -414,10 +422,11 @@ class QASystem:
             })
 
         prompt_parts = ["【检索片段】\n" + "\n\n".join(context_lines)]
-        if include_history and self.history:
+        hist = self.histories.get("default", []) if history is None else history
+        if include_history and hist:
             hist_lines = [
                 f"用户: {h['question']}\n助手: {h['answer'][:150]}"
-                for h in self.history[-3:]
+                for h in hist[-3:]
             ]
             prompt_parts.append("【对话历史】\n" + "\n\n".join(hist_lines))
         prompt_parts.append(f"【用户问题】\n{question}")
@@ -767,7 +776,7 @@ class QASystem:
     # 主入口
     # ------------------------------------------------------------------
     def ask(self, question: str, top_k: int = 16,
-            scope: str | None = None) -> dict:
+            scope: str | None = None, session: str = "default") -> dict:
         """回答一个问题（含校验反馈再检索）。
 
         Args:
@@ -775,6 +784,8 @@ class QASystem:
             top_k: 最终送入 prompt 的片段数。
             scope: 论文作用域（PDF 文件名，见 papers()）。
                 为 None 时在全库检索。
+            session: 会话标识。同一 session 共享多轮历史（follow-up 指代解析），
+                不同 session 完全隔离（互不串台）。缺省 "default" 兼容 CLI。
 
         Returns:
             {
@@ -786,14 +797,17 @@ class QASystem:
                 "revised": bool,                     # 是否发生过补充检索修正
             }
         """
+        # 会话历史：本会话独立于其他会话
+        hist = self.histories.setdefault(session, [])
+
         # 0) 语料库元问题（全库 + 问"库里有什么论文"）：
         #    不走语义检索，直接按论文 id（source）分组列清单，见 _corpus_meta_answer
         if scope is None and META_QUESTION_RE.search(question):
             print("[meta] 语料库元问题，跳过语义检索，按 source 分组回答")
             answer, citations, verification = self._corpus_meta_answer(question)
-            self.history.append({"question": question, "answer": answer})
-            if len(self.history) > self.HISTORY_MAX:
-                self.history.pop(0)
+            hist.append({"question": question, "answer": answer})
+            if len(hist) > self.HISTORY_MAX:
+                hist.pop(0)
             return {
                 "question": question,
                 "answer": answer,
@@ -809,7 +823,7 @@ class QASystem:
             hits = self._retrieve_compare(question, top_k=top_k)
         else:
             # 1) 混合检索 + 精排
-            hits = self._retrieve(question, top_k=top_k, scope=scope)
+            hits = self._retrieve(question, top_k=top_k, scope=scope, history=hist)
 
         # 1.5) 数值统计意图：补表格块（排行榜/对比表/实验表）。LLM 精排按语义
         #     打分，表格块（内容以 | 分隔的 Markdown 表）因表达结构化、无连贯
@@ -839,7 +853,7 @@ class QASystem:
             }
 
         # 2) 第一轮生成 + 校验
-        answer, citations, verification = self._generate(question, hits)
+        answer, citations, verification = self._generate(question, hits, history=hist)
 
         # 3) 校验反馈再检索（self-correction）：
         #    存在 unsupported/partial 引用 -> 构造补充查询 -> 合并证据 -> 重新生成再校验
@@ -854,14 +868,15 @@ class QASystem:
                     if len(merged) > len(hits):
                         print(f"[self-correct] 补充检索到 {len(merged) - len(hits)} 个新片段，重新生成")
                         answer2, citations2, verification2 = \
-                            self._generate(question, merged, include_history=False)
+                            self._generate(question, merged, include_history=False,
+                                           history=hist)
                         answer, citations, verification = answer2, citations2, verification2
                         revised = True
 
         # 4) 记录历史（供下一轮 follow-up 使用；记最终回答）
-        self.history.append({"question": question, "answer": answer})
-        if len(self.history) > self.HISTORY_MAX:
-            self.history.pop(0)
+        hist.append({"question": question, "answer": answer})
+        if len(hist) > self.HISTORY_MAX:
+            hist.pop(0)
 
         return {
             "question": question,
