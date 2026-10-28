@@ -16,10 +16,15 @@ data/chunks.pkl
 data/papers/*.pdf
 data/papers_test/*.pdf
 data/_*.txt
+data/_*.log
 
-# 评测纯产物（不入库）
+# 评测纯产物（不入库；已跟踪的旧产物保留不动）
 eval/_*.txt
 eval/*.log
 eval/results/*.log
-eval/results/run_log.txt
+eval/results/run_log*.txt
 eval/results/backup_pre_fullrun/
+eval/results/samples_*.json
+eval/results/eval_summary_*.json
+eval/results/eval_results_*.json
+eval/results/ragas_scores_*.json

@@ -19,7 +19,7 @@ import re
 from openai import OpenAI
 
 from ..config import (LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, QUERY_EXPAND,
-                      MMR_ENABLED, MMR_TOP_K, MMR_LAMBDA)
+                      MMR_ENABLED, MMR_TOP_K, MMR_LAMBDA, HYBRID_USE_BM25)
 from .attribution import needs_full_snippet
 
 SYSTEM_PROMPT = """你是一位严谨的论文阅读助手。请根据【检索片段】回答用户问题，规则如下：
@@ -206,6 +206,7 @@ class QASystem:
                 self.store, self.bm25, self.chunks,
                 query=vector_query, bm25_query=bm25_query,
                 vector_k=vector_k, bm25_k=bm25_k, final_k=final_k, scope=scope,
+                use_bm25=HYBRID_USE_BM25,
             )
             all_hits.append(hits)
 
@@ -700,6 +701,7 @@ class QASystem:
                     self.store, self.bm25, self.chunks,
                     query=q_i, bm25_query=expand_query(q_i),
                     vector_k=16, bm25_k=16, final_k=16, scope=src,
+                    use_bm25=HYBRID_USE_BM25,
                 )
                 for chunk, _s in hits[:6]:
                     if chunk.chunk_id not in seen:
@@ -712,6 +714,7 @@ class QASystem:
                 self.store, self.bm25, self.chunks,
                 query=question, bm25_query=expand_query(question),
                 vector_k=8, bm25_k=8, final_k=8, scope=None,
+                use_bm25=HYBRID_USE_BM25,
             )
             for chunk, _s in hits:
                 if chunk.chunk_id not in seen:

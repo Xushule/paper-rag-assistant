@@ -48,6 +48,9 @@ QUERY_EXPAND = os.getenv("QUERY_EXPAND", "1") == "1"
 MMR_ENABLED = os.getenv("MMR_ENABLED", "1") == "1"
 MMR_TOP_K = int(os.getenv("MMR_TOP_K", "10"))  # MMR 从 RRF top20 里选几个进精排
 MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.7"))  # 相关度权重；越小越重多样性
+# 消融开关：是否走 BM25 关键词路与向量路做 RRF 融合。关闭后只保留向量路
+# （RRF 退化为纯向量排名），用于"仅向量（无 RRF 混合）"评测对比组。
+HYBRID_USE_BM25 = os.getenv("HYBRID_USE_BM25", "1") == "1"
 
 # ---------- LLM（M2 问答接口才用，先预留） ----------
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "deepseek")  # deepseek / local(Ollama)

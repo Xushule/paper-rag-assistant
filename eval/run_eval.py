@@ -46,6 +46,7 @@ GOLDEN_SET = EVAL_DIR / "golden_set.json"
 SAMPLES_PATH = RESULTS_DIR / "samples.json"
 SUMMARY_PATH = RESULTS_DIR / "eval_summary.json"
 DETAIL_PATH = RESULTS_DIR / "eval_results.json"
+RAGAS_SCORES_PATH = RESULTS_DIR / "ragas_scores.json"
 RUN_LOG = RESULTS_DIR / "run_log.txt"
 
 JUDGE_PROMPT = """你是答案评判员。请判断【系统回答】是否准确回答了【用户问题】并覆盖了【参考答案】的要点。
@@ -258,7 +259,7 @@ def run_ragas(samples: list[dict]) -> dict:
     result = evaluate(dataset=dataset, metrics=metrics)
 
     # 逐样本分值落盘（供诊断：哪些样本 nan、异常来源）
-    scores_path = RESULTS_DIR / "ragas_scores.json"
+    scores_path = RAGAS_SCORES_PATH
     scores_path.write_text(
         json.dumps(result.scores, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -286,7 +287,18 @@ def main():
     ap.add_argument("--skip-ask", action="store_true")
     ap.add_argument("--skip-ragas", action="store_true",
                     help="跳过 ragas（冒烟/局部验证时用，避免触发全量 5 小时指标计算）")
+    ap.add_argument("--tag", type=str, default="",
+                    help="消融/多组评测标记：输出写到 samples_{tag}.json 等，避免覆盖")
     args = ap.parse_args()
+
+    # 按 tag 隔离输出文件（消融评测四组配置各跑一遍时不互相覆盖）
+    if args.tag:
+        global SAMPLES_PATH, SUMMARY_PATH, DETAIL_PATH, RAGAS_SCORES_PATH, RUN_LOG
+        SAMPLES_PATH = RESULTS_DIR / f"samples_{args.tag}.json"
+        SUMMARY_PATH = RESULTS_DIR / f"eval_summary_{args.tag}.json"
+        DETAIL_PATH = RESULTS_DIR / f"eval_results_{args.tag}.json"
+        RAGAS_SCORES_PATH = RESULTS_DIR / f"ragas_scores_{args.tag}.json"
+        RUN_LOG = RESULTS_DIR / f"run_log_{args.tag}.txt"
 
     RESULTS_DIR.mkdir(exist_ok=True)
     golden = load_golden_set(args.limit, args.start)
