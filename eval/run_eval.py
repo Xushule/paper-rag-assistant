@@ -144,6 +144,7 @@ def judge_correctness(client: OpenAI, sample: dict) -> dict:
             answer=sample["answer"], contexts=ctx_block)}],
         temperature=0,
         max_tokens=200,
+        timeout=120,  # 显式超时：防止 API 挂起时进程无限等待（no_expand 卡死根因）
     )
     text = resp.choices[0].message.content or ""
     import re as _re
@@ -179,7 +180,8 @@ def run_ask(golden: list[dict], start: int) -> list[dict]:
 
 
 def run_judge(samples: list[dict]) -> list[dict]:
-    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
+                    timeout=120, max_retries=1)
     for i, s in enumerate(samples):
         if s.get("judge"):
             continue
@@ -229,7 +231,8 @@ def run_ragas(samples: list[dict]) -> dict:
     # LLM 判分走 DeepSeek。max_tokens 默认 1024，拆 statements 的 JSON 输出
     # 一长就被截断（IncompleteOutputException → 该样本 faithfulness=nan），
     # 调大到 4096 从源头解决截断；strictness 降到 1 减少一次请求 3 份的输出负担。
-    client = OpenAIClient(api_key=LLM_API_KEY, base_url=LLM_BASE_URL)
+    client = OpenAIClient(api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
+                          timeout=120, max_retries=1)
     llm = llm_factory(LLM_MODEL, client=client, max_tokens=4096)
     embeddings = OllamaEmbedWrapper()
 
