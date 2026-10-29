@@ -86,6 +86,10 @@ NO_RAG_PROMPT_HONEST = """请直接回答下面的问题（不参考任何文档
 
 问题：{question}"""
 
+NO_RAG_PROMPT_DEFAULT = """请回答下面的问题：
+
+问题：{question}"""
+
 NO_RAG_PROMPT_FABRICATE = """请回答下面的问题。务必给出具体、确定的答案，不要拒绝回答，也不要说"无法确定"或"我没有相关信息"；如果你不确定，基于你的知识推断出你认为最合理的答案（必要时可先写"我推测"再给出内容）：
 
 问题：{question}"""
@@ -94,15 +98,22 @@ NO_RAG_PROMPT_FABRICATE = """请回答下面的问题。务必给出具体、确
 class FakeQA:
     """无 RAG 对照组：跳过检索，纯 LLM 直接回答。ask 返回结构与 QASystem 兼容。
 
-    fabricate=True 时切换为"允许编造"提示词——对比诚实模式（1.0%），
-    量化"数字好看 ≠ 回答可信"：编造模式下模型会输出具体数字但多为幻觉。
+    mode:
+      honest    提示词强制"不确定就说不确定"（禁止编造）
+      default   普通提示词（无任何约束，模拟正常对话中的大模型默认行为）
+      fabricate 提示词强制"必须给出答案"（禁止拒绝，逼出幻觉）
+    三组对照量化：无检索时 LLM 的诚实度 / 幻觉率 / 准确率差异。
     """
 
-    def __init__(self, fabricate: bool = False):
+    PROMPTS = {"honest": NO_RAG_PROMPT_HONEST,
+               "default": NO_RAG_PROMPT_DEFAULT,
+               "fabricate": NO_RAG_PROMPT_FABRICATE}
+
+    def __init__(self, mode: str = "honest"):
         self.client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
                              timeout=120, max_retries=1)
         self.chunks = []
-        self.prompt = NO_RAG_PROMPT_FABRICATE if fabricate else NO_RAG_PROMPT_HONEST
+        self.prompt = self.PROMPTS[mode]
 
     def ask(self, question: str, scope=None) -> dict:
         resp = self.client.chat.completions.create(
@@ -194,8 +205,12 @@ def judge_correctness(client: OpenAI, sample: dict) -> dict:
         return {"correct": None, "missing": f"judge 解析失败: {e}"}
 
 
-def run_ask(golden: list[dict], start: int, no_rag: bool = False, fabricate: bool = False) -> list[dict]:
-    qa = build_qa() if not no_rag else FakeQA(fabricate=fabricate)
+def run_ask(golden: list[dict], start: int, no_rag: bool = False, fabricate: bool = False,
+            no_rag_mode: str = "honest") -> list[dict]:
+    if no_rag:
+        qa = FakeQA(mode="fabricate" if fabricate else no_rag_mode)
+    else:
+        qa = build_qa()
     # 断点续跑按"id 覆盖合并"：保留旧 samples 里本次不重跑的条目，
     # 只替换本次 golden 涉及的 id（旧实现 samples[:start] 会截断全量文件丢题）
     samples = []
@@ -339,9 +354,14 @@ def main():
                     help="消融/多组评测标记：输出写到 samples_{tag}.json 等，避免覆盖")
     ap.add_argument("--no-rag", action="store_true",
                     help="无 RAG 对照组：ask 阶段跳过检索，纯 LLM 直接回答（contexts 为空，只跑 judge 准确率，ragas 无意义）")
+    ap.add_argument("--no-rag-mode", type=str, default="honest",
+                    choices=["honest", "default", "fabricate"],
+                    help="无 RAG 模式（配合 --no-rag）：honest=禁止编造（默认）；default=普通提示词（模拟大模型默认行为）；fabricate=强制给出答案")
     ap.add_argument("--fabricate", action="store_true",
-                    help="与 --no-rag 搭配：允许编造模式（提示词禁止说'无法确定'，强制给出答案），用于量化幻觉代价")
+                    help="与 --no-rag 搭配：允许编造模式（等价 --no-rag-mode fabricate），用于量化幻觉代价")
     args = ap.parse_args()
+    if args.fabricate:
+        args.no_rag_mode = "fabricate"
 
     # 按 tag 隔离输出文件（消融评测四组配置各跑一遍时不互相覆盖）
     if args.tag:
@@ -361,7 +381,8 @@ def main():
     if args.skip_ask:
         samples = json.loads(SAMPLES_PATH.read_text(encoding="utf-8"))
     else:
-        samples = run_ask(golden, args.start, no_rag=args.no_rag, fabricate=args.fabricate)
+        samples = run_ask(golden, args.start, no_rag=args.no_rag,
+                          fabricate=args.fabricate, no_rag_mode=args.no_rag_mode)
 
     # 阶段二：LLM 判分（答案准确率）
     samples = run_judge(samples)
