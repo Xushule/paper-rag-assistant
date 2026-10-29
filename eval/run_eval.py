@@ -169,13 +169,24 @@ def run_ask(golden: list[dict], start: int) -> list[dict]:
         samples = json.loads(SAMPLES_PATH.read_text(encoding="utf-8"))
     this_ids = {item["id"] for item in golden}
     samples = [s for s in samples if s["id"] not in this_ids]
+    failed: list[str] = []
     for i, item in enumerate(golden):
         sid = item["id"]
         print(f"[{start + i + 1}/{start + len(golden)}] {sid} {item['question'][:30]}...")
-        sample = ask_one(qa, item)
+        try:
+            sample = ask_one(qa, item)
+        except Exception as e:
+            # 单样本容错：LLM 网络/超时异常只跳过该样本，不中断整组。
+            # 失败样本不写入 samples，本轮汇总的有效样本数会少于 golden 总数，
+            # 可用 --skip-ask 重跑补齐（断点按 id 覆盖合并）。
+            print(f"[ask 失败] {sid}: {type(e).__name__}: {str(e)[:150]}")
+            failed.append(sid)
+            continue
         samples.append(sample)
         SAMPLES_PATH.write_text(
             json.dumps(samples, ensure_ascii=False, indent=2), encoding="utf-8")
+    if failed:
+        print(f"[ask 完成] {len(samples)} 条已落盘，{len(failed)} 条失败待补: {failed}")
     return samples
 
 

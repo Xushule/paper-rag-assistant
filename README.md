@@ -170,15 +170,26 @@ RAG 对 "语料库元问题" 有结构性盲区 —— 论文正文不会写 "�
 
 ### RAGAS 评测（100 样本 Golden Set）
 
-| 指标 | 结果 | 含义 |
-| --- | --- | --- |
-| 答案准确率（LLM-as-judge） | **96.0%** | 回答覆盖参考答案要点（验收线 ≥80%，超出） |
-| faithfulness（忠实度） | **0.9451** | 1 − 幻觉率 ≈ 5.5%（验收线 ≤5%，接近达标；低分样本抽检为 judge 波动非幻觉） |
-| answer_relevancy | 0.8681 | 回答与问题相关性 |
-| context_precision | 0.5972 | 检索片段精确性（无独立精排模型的常规水平，靠 LLM 精排兜底） |
-| context_recall | 0.9425 | 检索片段对答案的覆盖程度（高） |
+**四组消融对比**（同一代码基线、同一 100 样本，2026-10-29 全量完成）：
 
-> 评测方式：`eval/run_eval.py` 三阶段解耦 —— ask（真实链路问答落盘）→ judge（DeepSeek 判分）→ ragas（faithfulness/relevancy/precision/recall），支持断点续跑与 --skip-ask 复用样本。完整明细见 `eval/results/`。
+| 组 | 配置 | 答案准确率 | faithfulness | answer_relevancy | context_precision | context_recall |
+| --- | --- | --- | --- | --- | --- | --- |
+| **full（完整版）** | RRF 混合 + MMR + 查询扩展 | **93.0%** | 0.9519 | 0.8810 | 0.6142 | 0.9150 |
+| no_mmr | 关 MMR（RRF → 直接精排） | 91.0% | 0.9572 | 0.8737 | 0.5868 | 0.9150 |
+| no_expand | 关查询扩展（单路检索） | 89.0% | 0.9614 | 0.8074 | 0.5422 | 0.8333 |
+| vector_only | 仅向量（无 BM25，RRF 退化为纯向量排名） | 90.0% | 0.9626 | 0.8664 | 0.5789 | 0.8925 |
+
+> no_expand 组 ragas 有效样本 45-47（该组部分样本上下文未命中 ragas 指标计算所需字段，见 `eval_summary_no_expand.json` effective_n）。
+
+**自研组件增量贡献（消融结论）**：
+- **查询扩展 → +4.0 个点**（93.0 vs 89.0）：LLM 生成子查询扩召回的价值最大，relevancy/precision/recall 全面上升；
+- **RRF 跨路融合（BM25+向量）→ +3.0 个点**（93.0 vs 90.0）：双路互补优于纯向量单路；
+- **MMR 多样性 → +2.0 个点**（93.0 vs 91.0）：去冗余后精排上游上下文更聚焦，precision 提升最明显（0.6142 vs 0.5868）；
+- 三个组件全开时效果最好（93.0%），全部超出验收线 ≥80%；faithfulness 均 >0.95（幻觉率 <5%）。
+
+> 说明：早期 10-23 曾测得 96.0% / 0.9451，为当时代码版本发布值；消融四组为 10-29 同一轮次内互比（会话隔离等代码演进 + LLM 生成波动导致绝对数与旧值有差），结论以同轮互比为准。
+
+> 评测方式：`eval/run_eval.py` 三阶段解耦 —— ask（真实链路问答落盘）→ judge（DeepSeek 判分）→ ragas（faithfulness/relevancy/precision/recall），支持 `--tag` 输出隔离、断点续跑与 `--skip-ask` 复用样本；评测客户端显式 `timeout=120`、ask 单样本容错（失败跳过不崩整组）。四组驱动见 `scripts/run_ablation.py`，完整明细见 `eval/results/`。
 
 
 
