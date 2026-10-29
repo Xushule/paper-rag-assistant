@@ -82,6 +82,31 @@ def load_golden_set(limit: int | None, start: int) -> list[dict]:
     return data
 
 
+NO_RAG_PROMPT = """请直接回答下面的问题（不参考任何文档，仅凭你已有的知识回答；如果不知道，请明确说"无法确定"而不是编造）：
+
+问题：{question}"""
+
+
+class FakeQA:
+    """无 RAG 对照组：跳过检索，纯 LLM 直接回答。ask 返回结构与 QASystem 兼容。"""
+
+    def __init__(self):
+        self.client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_BASE_URL,
+                             timeout=120, max_retries=1)
+        self.chunks = []
+
+    def ask(self, question: str, scope=None) -> dict:
+        resp = self.client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[{"role": "user", "content": NO_RAG_PROMPT.format(question=question)}],
+            temperature=0,
+            max_tokens=512,
+            timeout=120,
+        )
+        return {"answer": resp.choices[0].message.content or "",
+                "citations": [], "verification": {}, "revised": False}
+
+
 def build_qa() -> QASystem:
     store = VectorStore()
     bm25, chunks = load_index()
@@ -160,8 +185,8 @@ def judge_correctness(client: OpenAI, sample: dict) -> dict:
         return {"correct": None, "missing": f"judge 解析失败: {e}"}
 
 
-def run_ask(golden: list[dict], start: int) -> list[dict]:
-    qa = build_qa()
+def run_ask(golden: list[dict], start: int, no_rag: bool = False) -> list[dict]:
+    qa = build_qa() if not no_rag else FakeQA()
     # 断点续跑按"id 覆盖合并"：保留旧 samples 里本次不重跑的条目，
     # 只替换本次 golden 涉及的 id（旧实现 samples[:start] 会截断全量文件丢题）
     samples = []
@@ -303,6 +328,8 @@ def main():
                     help="跳过 ragas（冒烟/局部验证时用，避免触发全量 5 小时指标计算）")
     ap.add_argument("--tag", type=str, default="",
                     help="消融/多组评测标记：输出写到 samples_{tag}.json 等，避免覆盖")
+    ap.add_argument("--no-rag", action="store_true",
+                    help="无 RAG 对照组：ask 阶段跳过检索，纯 LLM 直接回答（contexts 为空，只跑 judge 准确率，ragas 无意义）")
     args = ap.parse_args()
 
     # 按 tag 隔离输出文件（消融评测四组配置各跑一遍时不互相覆盖）
@@ -323,7 +350,7 @@ def main():
     if args.skip_ask:
         samples = json.loads(SAMPLES_PATH.read_text(encoding="utf-8"))
     else:
-        samples = run_ask(golden, args.start)
+        samples = run_ask(golden, args.start, no_rag=args.no_rag)
 
     # 阶段二：LLM 判分（答案准确率）
     samples = run_judge(samples)
