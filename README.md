@@ -170,6 +170,20 @@ RAG 对 "语料库元问题" 有结构性盲区 —— 论文正文不会写 "�
 
 ### RAGAS 评测（100 样本 Golden Set）
 
+**完整评测总表（消融四组 + 无 RAG 三组对照组，2026-10-29 同一基线、同一 100 样本）**：
+
+| 组 | 配置 | 答案准确率 | faithfulness | relevancy | precision | recall |
+| --- | --- | --- | --- | --- | --- | --- |
+| **full** | RRF 混合 + MMR + 查询扩展（全开） | **93.0%** | 0.9519 | 0.8810 | 0.6142 | 0.9150 |
+| no_mmr | 关 MMR | 91.0% | 0.9572 | 0.8737 | 0.5868 | 0.9150 |
+| no_expand | 关查询扩展 | 89.0% | 0.9614 | 0.8074 | 0.5422 | 0.8333 |
+| vector_only | 仅向量（无 BM25） | 90.0% | 0.9626 | 0.8664 | 0.5789 | 0.8925 |
+| no_rag | 无检索 · 诚实模式（不确定就说不确定） | 1.0% | — | — | — | — |
+| no_rag_default | 无检索 · 普通提示词（大模型默认行为） | 3.0% | — | — | — | — |
+| no_rag_fab | 无检索 · 强制编造 | 7.0% | — | — | — | — |
+
+> 无 RAG 三组为同一 DeepSeek 模型仅改提示词的对照；ragas 指标需检索上下文，无 RAG 组不适用。CSV 版见 `eval/results/ablation_summary.csv`（由 `scripts/export_ablation_summary.py` 生成）。
+
 **四组消融对比**（同一代码基线、同一 100 样本，2026-10-29 全量完成）：
 
 | 组 | 配置 | 答案准确率 | faithfulness | answer_relevancy | context_precision | context_recall |

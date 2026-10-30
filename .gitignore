@@ -28,3 +28,4 @@ eval/results/samples_*.json
 eval/results/eval_summary_*.json
 eval/results/eval_results_*.json
 eval/results/ragas_scores_*.json
+eval/results/*.csv
