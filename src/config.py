@@ -24,6 +24,9 @@ PAPERS_DIR = DATA_DIR / "papers"        # 放论文 PDF
 CHROMA_DIR = DATA_DIR / "chroma_db_v2"
 BM25_PATH = DATA_DIR / "bm25.pkl"       # BM25 索引缓存（重建时覆盖写）
 CHUNK_META_PATH = DATA_DIR / "chunks.pkl"  # 分块元数据缓存（重建时覆盖写）
+# MinerU 解析产物目录（结构化 Markdown，本地 D 盘，不占 C 盘）。
+# 由 src/parser/mineru_parser.py 消费；可经环境变量 MINERU_OUT_DIR 覆盖。
+MINERU_OUT_DIR = Path(os.getenv("MINERU_OUT_DIR", "D:/mineru_papers_out"))
 
 # ---------- Embedding ----------
 # 来源二选一：

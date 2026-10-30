@@ -232,6 +232,30 @@ RAG 对 "语料库元问题" 有结构性盲区 —— 论文正文不会写 "�
 
 > 评测方式：`eval/run_eval.py` 三阶段解耦 —— ask（真实链路问答落盘）→ judge（DeepSeek 判分）→ ragas（faithfulness/relevancy/precision/recall），支持 `--tag` 输出隔离、断点续跑与 `--skip-ask` 复用样本；评测客户端显式 `timeout=120`、ask 单样本容错（失败跳过不崩整组）。四组驱动见 `scripts/run_ablation.py`，完整明细见 `eval/results/`。
 
+### 解析器 A/B 评测：MinerU vs pdfplumber（2026-10-30）
+
+同一 100 题 Golden Set、同一检索链路（RRF+MMR+查询扩展全开），**唯一变量 = PDF 解析器**（pdfplumber 双栏还原 vs MinerU 4.0.12 本地结构化 Markdown + 适配器转换后分块入库）：
+
+| 组 | 解析器 | 答案准确率 | faithfulness | answer_relevancy | context_precision | context_recall |
+| --- | --- | --- | --- | --- | --- | --- |
+| full（baseline） | pdfplumber（双栏坐标还原） | **93.0%** | 0.9519 | 0.8810 | 0.6142 | 0.9150 |
+| mineru_ab | MinerU 4.0.12（本地，Markdown→适配器→同 chunker） | 87.0% | **0.9543** | 0.8244 | 0.6032 | 0.8725 |
+
+**逐题 diff（100 题共同样本）**：都对 82、**A对B错（MinerU 变差）11**、**A错B对（MinerU 变好）5**、都错 2；净 -6.0。
+
+**变差 11 题拆解（按根因）**：
+- **解析内容丢失（-9，主因）**：`rc-06/17/18/19/20/21/22/24/26` 全部落在 Raindrop_Clarity 篇——MinerU 产物中**训练/测试划分数字整段缺失**（4,713 / 729 / 8,655 / 1,089 在 MinerU Markdown 中检索不到，原 PDF 明确存在："where 4,713 paired images are used for the training set, and the remaining 729..."）。该篇复杂表（rowspan/colspan）虽经适配器转出 PSNR 表（26.03 等），但正文数字句被 MinerU 版面分析吞掉；
+- **LLM 保守表述（1）**：`nr-05`（NightRain vs FDM）——FDM 23.49→Ours 26.73 的表格数字**已检索到**，但回答写成"未找到明确提升数值"而非直接给差值；
+- **召回覆盖（1）**：`all-18`（NTIRE 基于 Restormer 的方法）——GURain/Miracle 已答出，PolyRain 的 X-Restormer 段未进入 top 上下文被遗漏。
+
+**变好 5 题**：`all-02/06/14`（四篇对比/评测指标/类型出处，元问题类）+ `ntire-10/15`（隐藏排行榜原因、模型复杂度范围）——MinerU 的版面阅读顺序与标题层级对**全库对比/元问题**与挑战赛类有正向帮助。
+
+**结论**：
+1. **当前适配器实现下，MinerU 不优于 pdfplumber**（87.0 vs 93.0，净 -6.0）；MinerU 强在版面结构/标题层级/公式（变好方向集中在元问题与挑战赛），但**复杂表格与正文完整性反而弱于 pdfplumber**（单篇丢 9 题的关键数字）；
+2. "换解析器补短板"的假设未成立——MinerU 提升的恰是 pdfplumber 不弱的类别（元问题），而 pdfplumber 的长板（表格数字提取）在 MinerU 上出现单点硬伤；
+3. 潜在方向（未实施）：**双解析融合**——MinerU 提供版面结构/阅读顺序，pdfplumber 数字句做交叉补齐兜底；
+4. GPU 版 torch 2.5.1+cu124 已装（`cuda=True`，RTX 4060），可加速 MinerU 推理（本次评测为 CPU 推理，与结果无关）。
+
 
 
 ***

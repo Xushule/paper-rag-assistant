@@ -229,10 +229,30 @@ def _split_section(section_text: str, target: int, overlap: int) -> list[str]:
     return chunks
 
 
-def chunk_pdf(pdf_path: str | Path) -> list[Chunk]:
-    """完整分块流程：解析 PDF -> 分章节 -> 切块 -> 返回 Chunk 列表。"""
+def chunk_pdf(pdf_path: str | Path, parser: str = "auto") -> list[Chunk]:
+    """完整分块流程：解析 PDF -> 分章节 -> 切块 -> 返回 Chunk 列表。
+
+    parser 取值：
+      auto      默认：MinerU 产物存在则走 MinerU（src/parser/mineru_parser.py），
+                否则回退 pdfplumber 原生解析（extract_pdf_text）；
+      mineru    强制走 MinerU（产物缺失时报错，便于 A/B 对照时暴露配置问题）；
+      pdfplumber 强制走 pdfplumber 原生解析（对照基线）。
+    """
     pdf_path = Path(pdf_path)
-    pages = extract_pdf_text(pdf_path)
+    if parser in ("auto", "mineru"):
+        from .mineru_parser import find_mineru_markdown, mineru_markdown_to_pages
+        md = find_mineru_markdown(pdf_path)
+        if md is not None:
+            print(f"[chunker] 解析器=MinerU  {md.name}")
+            pages = mineru_markdown_to_pages(md)
+        elif parser == "mineru":
+            raise FileNotFoundError(
+                f"[chunker] 未找到 MinerU 产物（MINERU_OUT_DIR）: {pdf_path.stem}")
+        else:
+            print(f"[chunker] 解析器=pdfplumber（无 MinerU 产物）  {pdf_path.name}")
+            pages = extract_pdf_text(pdf_path)
+    else:
+        pages = extract_pdf_text(pdf_path)
     sections = split_into_sections(pages)
 
     chunks = []

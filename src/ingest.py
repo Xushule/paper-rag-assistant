@@ -23,7 +23,7 @@ from src.retrieval.bm25_index import build_index
 from src.retrieval.embed_store import VectorStore
 
 
-def main(papers_dir: Path = PAPERS_DIR) -> None:
+def main(papers_dir: Path = PAPERS_DIR, parser: str = "auto") -> None:
     papers_dir.mkdir(parents=True, exist_ok=True)
     pdfs = sorted(papers_dir.glob("*.pdf"))
     if not pdfs:
@@ -34,7 +34,7 @@ def main(papers_dir: Path = PAPERS_DIR) -> None:
     all_chunks = []
     for pdf in pdfs:
         print(f"[ingest] 处理: {pdf.name}")
-        chunks = chunk_pdf(pdf)
+        chunks = chunk_pdf(pdf, parser=parser)
         print(f"         分块数: {len(chunks)}")
         all_chunks.extend(chunks)
 
@@ -62,5 +62,21 @@ def main(papers_dir: Path = PAPERS_DIR) -> None:
 
 
 if __name__ == "__main__":
-    arg = sys.argv[1] if len(sys.argv) > 1 else None
-    main(Path(arg) if arg else PAPERS_DIR)
+    args = sys.argv[1:]
+    parser_mode = "auto"
+    dir_arg = None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--parser" and i + 1 < len(args):
+            parser_mode = args[i + 1]
+            i += 2
+            continue
+        if a.startswith("--parser="):
+            parser_mode = a.split("=", 1)[1]
+            i += 1
+            continue
+        if not a.startswith("-"):
+            dir_arg = a
+        i += 1
+    main(Path(dir_arg) if dir_arg else PAPERS_DIR, parser=parser_mode)
