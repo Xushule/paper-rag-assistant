@@ -23,9 +23,12 @@ from src.retrieval.bm25_index import build_index
 from src.retrieval.embed_store import VectorStore
 
 
-def main(papers_dir: Path = PAPERS_DIR, parser: str = "auto") -> None:
+def main(papers_dir: Path = PAPERS_DIR, parser: str = "auto", skip: str = "") -> None:
     papers_dir.mkdir(parents=True, exist_ok=True)
     pdfs = sorted(papers_dir.glob("*.pdf"))
+    if skip:
+        pdfs = [p for p in pdfs if skip not in p.name]
+        print(f"[ingest] 跳过含 '{skip}' 的 PDF，剩余 {len(pdfs)} 篇")
     if not pdfs:
         print(f"[ingest] 没有找到 PDF，请把论文放到: {papers_dir}")
         return
@@ -65,6 +68,7 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     parser_mode = "auto"
     dir_arg = None
+    skip_kw = ""
     i = 0
     while i < len(args):
         a = args[i]
@@ -76,7 +80,15 @@ if __name__ == "__main__":
             parser_mode = a.split("=", 1)[1]
             i += 1
             continue
+        if a == "--skip" and i + 1 < len(args):
+            skip_kw = args[i + 1]
+            i += 2
+            continue
+        if a.startswith("--skip="):
+            skip_kw = a.split("=", 1)[1]
+            i += 1
+            continue
         if not a.startswith("-"):
             dir_arg = a
         i += 1
-    main(Path(dir_arg) if dir_arg else PAPERS_DIR, parser=parser_mode)
+    main(Path(dir_arg) if dir_arg else PAPERS_DIR, parser=parser_mode, skip=skip_kw)

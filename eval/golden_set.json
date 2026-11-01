@@ -249,14 +249,14 @@
     "category": "元问题",
     "scope": null,
     "question": "这个库里一共有几篇论文？",
-    "reference": "库内共 4 篇论文：AGAN、NightRain、NTIRE2025 挑战赛报告、Raindrop Clarity。"
+    "reference": "库内共 5 篇论文：AGAN、NightRain、NTIRE2025 挑战赛报告、Raindrop Clarity、Restormer。"
   },
   {
     "id": "all-02",
     "category": "对比",
     "scope": null,
-    "question": "对比一下这四篇论文有什么不同？",
-    "reference": "四篇定位不同：AGAN 是单图像雨滴去除方法（注意力 GAN）；NightRain 是夜间视频去雨方法（扩散模型）；Raindrop Clarity 是双聚焦昼夜数据集论文；NTIRE2025 是基于 Raindrop Clarity 的挑战赛方法与结果报告。"
+    "question": "对比一下这五篇论文有什么不同？",
+    "reference": "五篇定位不同：AGAN 是单图像雨滴去除方法（注意力 GAN）；NightRain 是夜间视频去雨方法（扩散模型）；Raindrop Clarity 是双聚焦昼夜数据集论文；NTIRE2025 是基于 Raindrop Clarity 的挑战赛方法与结果报告；Restormer 是通用图像复原 Transformer 方法（MDTA/GDFN，覆盖去雨、去模糊、去噪等任务）。"
   },
   {
     "id": "all-03",
@@ -269,8 +269,8 @@
     "id": "all-04",
     "category": "对比",
     "scope": null,
-    "question": "这四篇论文里哪些是提出方法的，哪些是数据集的？",
-    "reference": "方法论文：AGAN（雨滴去除）、NightRain（夜间视频去雨）；数据集/报告：Raindrop Clarity（数据集）、NTIRE2025（挑战赛结果报告）。"
+    "question": "这五篇论文里哪些是提出方法的，哪些是数据集的？",
+    "reference": "方法论文：AGAN（雨滴去除）、NightRain（夜间视频去雨）、Restormer（通用图像复原）；数据集/报告：Raindrop Clarity（数据集）、NTIRE2025（挑战赛结果报告）。"
   },
   {
     "id": "all-05",
@@ -291,7 +291,7 @@
     "category": "对比",
     "scope": null,
     "question": "这些论文各自使用了什么数据集？",
-    "reference": "AGAN 使用自己采集的雨滴数据集（Sony A6000/Canon EOS 60）；NightRain 使用 SynNightRain 合成数据集加真实夜间视频；Raindrop Clarity 和 NTIRE2025 使用 Raindrop Clarity 数据集。"
+    "reference": "AGAN 使用自己采集的雨滴数据集（Sony A6000/Canon EOS 60）；NightRain 使用 SynNightRain 合成数据集加真实夜间视频；Raindrop Clarity 和 NTIRE2025 使用 Raindrop Clarity 数据集；Restormer 使用多个图像复原基准数据集（如去雨 Rain100H/Test100、去模糊 GoPro 等）。"
   },
   {
     "id": "all-08",
@@ -668,15 +668,15 @@
     "id": "all-14",
     "category": "元问题",
     "scope": null,
-    "question": "这四篇论文分别是什么类型、什么出处？",
-    "reference": "三篇 arXiv 论文：AGAN（单图像雨滴去除方法，2017）、NightRain（夜间视频去雨方法，2024）、Raindrop Clarity（双聚焦数据集，2024）；一篇挑战赛报告：NTIRE2025 Day and Night Raindrop Removal（2025）。"
+    "question": "这五篇论文分别是什么类型、什么出处？",
+    "reference": "四篇 arXiv 论文：AGAN（单图像雨滴去除方法，2017）、NightRain（夜间视频去雨方法，2024）、Raindrop Clarity（双聚焦数据集，2024）、Restormer（通用图像复原 Transformer，2022）；一篇挑战赛报告：NTIRE2025 Day and Night Raindrop Removal（2025）。"
   },
   {
     "id": "all-15",
     "category": "元问题",
     "scope": null,
-    "question": "库中四篇论文的 arXiv 编号分别是什么？",
-    "reference": "AGAN：1711.10098；NightRain：2401.00729；Raindrop Clarity：2407.16957；NTIRE2025：2504.12711。"
+    "question": "库中五篇论文的 arXiv 编号分别是什么？",
+    "reference": "AGAN：1711.10098；NightRain：2401.00729；Raindrop Clarity：2407.16957；NTIRE2025：2504.12711；Restormer：2111.09881。"
   },
   {
     "id": "all-16",

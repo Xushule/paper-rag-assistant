@@ -21,12 +21,18 @@ PAPERS_DIR = DATA_DIR / "papers"        # 放论文 PDF
 # 向量库持久化目录。2026-10-08 表格结构化改造后旧库（chroma_db，混排版）
 # 与新版分块不兼容；为避免删除操作，新库改用 chroma_db_v2，旧目录原样保留，
 # 确认新库稳定后可手动删除 data/chroma_db。
-CHROMA_DIR = DATA_DIR / "chroma_db_v2"
-BM25_PATH = DATA_DIR / "bm25.pkl"       # BM25 索引缓存（重建时覆盖写）
-CHUNK_META_PATH = DATA_DIR / "chunks.pkl"  # 分块元数据缓存（重建时覆盖写）
+# 2026-11-01 库覆盖污染修复：chroma_db_v2 曾被子 MinerU 评测重建覆盖，
+# 现默认指向独立重建的 pdfplumber 基线库（chroma_pdfplumber）；三库隔离：
+# pdfplumber(基线) / mineru_v1(截断版评测) / mineru_v2(全量版评测)。
+# 可经环境变量 CHROMA_DIR / BM25_PATH / CHUNK_META_PATH 覆盖——用于评测隔离。
+CHROMA_DIR = Path(os.getenv("CHROMA_DIR", str(DATA_DIR / "chroma_pdfplumber")))
+BM25_PATH = Path(os.getenv("BM25_PATH", str(DATA_DIR / "bm25_pdfplumber.pkl")))       # BM25 索引缓存（重建时覆盖写）
+CHUNK_META_PATH = Path(os.getenv("CHUNK_META_PATH", str(DATA_DIR / "chunks_pdfplumber.pkl")))  # 分块元数据缓存（重建时覆盖写）
 # MinerU 解析产物目录（结构化 Markdown，本地 D 盘，不占 C 盘）。
 # 由 src/parser/mineru_parser.py 消费；可经环境变量 MINERU_OUT_DIR 覆盖。
-MINERU_OUT_DIR = Path(os.getenv("MINERU_OUT_DIR", "D:/mineru_papers_out"))
+# 2026-11-01：默认指向 --pages all 全量重解析产物（修复默认前 10 页截断）；
+# D:/mineru_papers_out 为截断旧版（仅评测 mineru_v1 对照时使用）。
+MINERU_OUT_DIR = Path(os.getenv("MINERU_OUT_DIR", "D:/mineru_papers_out_v2"))
 
 # ---------- Embedding ----------
 # 来源二选一：

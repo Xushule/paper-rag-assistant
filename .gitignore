@@ -11,18 +11,33 @@ conda-env/
 # 数据与索引产物（不入库）
 data/chroma_db/
 data/chroma_db_v2/
+data/chroma_eval_4p/
+data/chroma_pdfplumber/
+data/chroma_mineru_v1/
+data/chroma_mineru_v2/
 data/bm25.pkl
+data/bm25_*.pkl
 data/chunks.pkl
+data/chunks_*.pkl
 data/papers/*.pdf
 data/papers_test/*.pdf
 data/_*.txt
 data/_*.log
+
+# MinerU 服务锁与本地缓存
+.mineru-service.lock
+blobs/
 
 # 评测纯产物（不入库；已跟踪的旧产物保留不动）
 eval/_*.txt
 eval/*.log
 eval/results/*.log
 eval/results/run_log*.txt
+eval/results/_*.txt
+eval/results/_archive_prefinal/
+eval/results/ab_diff_mineru.txt
+eval/results/ablation_deep_dive.txt
+eval/results/monitor_status.txt
 eval/results/backup_pre_fullrun/
 eval/results/samples_*.json
 eval/results/eval_summary_*.json
