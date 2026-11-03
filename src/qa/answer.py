@@ -69,8 +69,10 @@ COMPARE_RE = re.compile(
 # 对比问题若未点名具体论文但指代全库，按"全部论文逐篇对比"处理（M2.14 补漏：
 # "对比一下这四个论文有什么不同" 因无点名词退化普通检索，候选被 RC 垄断，
 # LLM 把 RC 里的外部基线 IDT/RDiffusion 误当论文回答，漏掉 NTIRE2025/NightRain）。
+# 2026-11-03：五篇口径统一后补 "五篇/五个"（"对比一下这五篇论文" 原不命中，
+# 退化普通检索，对比链路的"每篇至少 1 块"保底失效）。
 ALL_PAPERS_RE = re.compile(
-    r"(全部|所有|这几个|这几篇|这些论文|四个|四篇|四个论文|各篇|每一篇|所有论文)"
+    r"(全部|所有|这几个|这几篇|这些论文|四个|四篇|四个论文|五篇|五个|五篇论文|各篇|每一篇|所有论文)"
 )
 
 # 数值统计意图：问"范围/跨度/排行/上下界/参数量/复杂度"时，LLM 精排常把
@@ -87,9 +89,21 @@ NUM_RANGE_RE = re.compile(
 # 分散在各篇的数据集/方法/动机块，且这些块常被参考文献块挤出单查询 top4
 # （实测 AGAN 的 Sony A6000 采集块排第 14、NTIRE 的 X-Restormer 块排 10+）。
 # 命中时 per_paper 对每篇启用"问题/数据集/方法/实验"四路查询，各保 1 块。
+# 2026-11-03：补 "各自/用了什么/用什么/各篇/每一篇"——all-07"各自使用了什么
+# 数据集"、all-06"都用了什么评测指标"原不命中任何枚举词，只走普通 per_paper
+# top5 保底，没有五路查询增强（实测 all-07 上下文里 NightRain 仅 1 块）。
 ENUM_RE = re.compile(
     r"(哪些|有哪些|提出|列举|各个|各有什么|共同|有什么|"
-    r"分别|哪个|谁|基于.{0,12}方法)"
+    r"分别|哪个|谁|各自|用了什么|用什么|各篇|每一篇|基于.{0,12}方法)"
+)
+
+# 枚举题中"答案在表格里"的线索：数据集/指标/数值/范围/排行类。
+# 命中 ENUM_RE 且 ENUM_TABLE_RE 时，ask() 4.6 段做表格块强制保底
+# （all-07 的 Restormer Table1 列名被 MinerU 拆散，精排不认为相关，
+#  必须强制补进上下文；动机/对比类枚举题不需要表格，见 4.6 注释）。
+ENUM_TABLE_RE = re.compile(
+    r"(数据集|指标|评测|PSNR|SSIM|LPIPS|排名|排行榜|多少|范围|"
+    r"参数量|复杂度|基准|数值|结果|划分|训练集|测试集)"
 )
 
 
@@ -264,22 +278,34 @@ class QASystem:
                     return len(inline_ref.findall(lines[0])) >= 2
 
                 if ENUM_RE.search(question):
-                    # 子主题列举：五路查询（问题/数据集/方法/实验/数据采集），
-                    # merged 按路重要性拼接（q 前 8 + 采集前 3 + 数据集/方法/实验
-                    # 各前 2）并去重保序。实测：
+                    # 子主题列举：七路查询（问题/数据集中文/基准英文/方法/实验/
+                    # 数据采集/动机应用），merged 按路重要性拼接并去重保序。实测：
                     #   - AGAN Sony A6000 采集块（all-17 要点）只在"数据采集"路
                     #     进前 3，其他路排 14-15（混合块 embedding 稀释）；
-                    #   - NTIRE X-Restormer 块（all-18 要点）在原问题排第 8。
+                    #   - NTIRE X-Restormer 块（all-18 要点）在原问题排第 8；
+                    #   - Restormer 的数据集/基准名（Rain100H/Test100/GoPro）是
+                    #     英文，中文"数据集"路匹配不到，需英文基准路（all-07 缺
+                    #     具体基准名的根因，2026-11-03 加）；
+                    #   - all-16"共同应用动机"需要 Intro/结论段的自动驾驶/行人
+                    #     检测等动机块，需动机应用路（2026-11-03 加）。
                     # guaranteed 每篇取前 12（48 池）由 LLM 精排淘汰到 top16。
                     probes = [
                         question,
                         "这篇论文提出的数据集、数据收集方式或评测基准是什么",
+                        "datasets and evaluation benchmarks used in this paper, "
+                        "e.g. Rain100H, Test100, GoPro, PSNR, SSIM, benchmark metrics",
                         "这篇论文提出的方法、网络结构或算法流程是什么",
                         "这篇论文的实验设置、定量结果和主要结论是什么",
                         "这篇论文的数据集是怎么收集或构建的，用了什么拍摄设备或合成方法",
+                        "这篇论文的研究动机、目标应用场景（如自动驾驶、监控、行人检测）"
+                        "和要解决的问题是什么",
                     ]
-                    caps = [8, 2, 2, 2, 3]
-                    order = [0, 4, 1, 2, 3]  # 路重要性：问题→采集→数据集→方法→实验
+                    caps = [8, 2, 3, 2, 2, 3, 2]
+                    # 路重要性：问题→采集→数据集→基准→动机→方法→实验
+                    order = [0, 5, 1, 2, 6, 3, 4]
+                    # 基准路 caps=3：Restormer 的 Table1 表格块（含拆散列名
+                    # Rain10/0H）在基准路排 3-4 名，caps=2 时被挤出 per_paper
+                    # 保底，导致 all-07 上下文无 Restormer 数据集信息（2026-11-03）。
                     for src in sorted({c.source for c in self.chunks}):
                         lane: dict[str, list] = {p: [] for p in probes}
                         for p in probes:
@@ -331,9 +357,11 @@ class QASystem:
                 guaranteed: dict = {}
                 if per_paper:
                     # 每篇取 per_paper 前 N（该篇相关度最高的块，覆盖要点块）。
-                    # enum 列举模式：五路候选（q8+cq3+ds2+me2+ex2=17 块），
+                    # enum 列举模式：七路候选（q8+cq3+ds2+bm3+mo2+me2+ex2=22 块），
                     # 取前 12 进池，靠精排淘汰到 top16（固定 top4 会把排 8-14
                     # 名的真实块如 X-Restormer/Sony 采集块挤掉）；普通模式 top4。
+                    # n_g=16 实测有害（all-14 翻负、每题变慢，2026-11-03 l3 96.0%）；
+                    # 表格块保底改由 4.6 段按篇强制替换实现（见 ask()）。
                     n_g = 12 if ENUM_RE.search(question) else 4
                     for src in sorted(all_srcs_set):
                         got_n = [(c, s) for c, s in per_paper if c.source == src][:n_g]
@@ -388,6 +416,33 @@ class QASystem:
                         hits = hits[:-1] + cand[:1]  # 替换末尾低分块
             except Exception as e:
                 print(f"[quota] 每篇保底失败: {e}")
+        # 4.6) 枚举/列举模式的"数据集/指标/数值"类问题表格块保底：表格列名
+        #      被 MinerU 拆散（Rain100H→"Rain10 | 0H"），LLM 精排按语义打分
+        #      时表格块常被判低相关挤出 top_k（l2/l3 实测 all-07 上下文始终
+        #      无 Restormer Table1 块 17），而"数据集/指标/数值"类答案恰在
+        #      表格里。对"该篇尚无表格块"的篇目，用该篇表格块（content 含
+        #      ≥4 个管道符）替换该篇自己在 keep 内的末尾块；不跨篇挤占，且
+        #      仅对含表格线索词的枚举题触发（动机/对比类题不需要表格，
+        #      避免挤掉动机块——l4/l5 实测 all-16 翻负即此因，2026-11-03）。
+        if scope is None and ENUM_RE.search(question) and ENUM_TABLE_RE.search(question):
+            try:
+                final = list(hits)
+                keep = final[:top_k]
+                for src in sorted({c.source for c in self.chunks}):
+                    src_idx = [i for i, (c, _) in enumerate(keep) if c.source == src]
+                    if not src_idx:
+                        continue
+                    if any(keep[i][0].content.count("|") >= 4 for i in src_idx):
+                        continue  # 该篇已有表格块
+                    cand = [c for c in self.chunks
+                            if c.source == src and c.content.count("|") >= 4
+                            and c.chunk_id not in {x.chunk_id for x, _ in keep}]
+                    if cand:
+                        keep[src_idx[-1]] = (cand[0], 0.0)
+                hits = keep + final[top_k:]
+                print(f"[enum-table] 表格保底 {len(keep)} 块，含表格 {sum(1 for c,_ in keep if c.content.count('|')>=4)} 块")
+            except Exception as e:
+                print(f"[enum-table] 保底失败: {e}")
         return hits[:top_k]
 
     # ------------------------------------------------------------------
