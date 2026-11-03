@@ -236,12 +236,12 @@ RAG 对 "语料库元问题" 有结构性盲区 —— 论文正文不会写 "�
 
 ### 解析器 A/B 评测：MinerU vs pdfplumber（2026-11-01 五篇口径，含 --pages all 根因修复）
 
-同一 100 题 Golden Set（5 篇口径）、同一检索链路（RRF+MMR+查询扩展全开），**唯一变量 = PDF 解析器**（pdfplumber 双栏还原 vs MinerU 4.0.12 本地结构化 Markdown + 适配器转换后分块入库）；三库独立构建（`data/chroma_pdfplumber` 220 块 / `chroma_mineru_v1` 171 块 / `chroma_mineru_v2` 243 块），杜绝建库覆盖污染：
+同一 100 题 Golden Set（5 篇口径）、同一检索链路（RRF+MMR+查询扩展全开），**唯一变量 = PDF 解析器**（pdfplumber 双栏还原 vs MinerU 4.0.12 本地结构化 Markdown + 适配器转换后分块入库）；库独立构建（`data/chroma_pdfplumber` 220 块 / `chroma_mineru_v2` 243 块，mineru_v1 截断版已于 2026-11-03 清理），杜绝建库覆盖污染：
 
 | 组 | 解析器 | 块数 | 答案准确率 |
 | --- | --- | --- | --- |
 | full（baseline） | pdfplumber（双栏坐标还原） | 220 | **96.0%** |
-| mineru_ab | MinerU 4.0.12（默认解析，仅前 10 页） | 171 | 87.0% |
+| mineru_ab | MinerU 4.0.12（默认解析，仅前 10 页；截断版产物已清理，数字留档对照） | 171 | 87.0% |
 | **mineru_v2** | MinerU 4.0.12（`--pages all` 全量重解析） | 243 | **94.0%** |
 
 **根因闭环**：MinerU 4.x 默认只解析 PDF 前 10 页且静默成功——NTIRE（26 页）/RC（18 页）/Restormer（12 页）的 Experiments 段整体丢失，RC 训练/测试划分数字（4,713 / 729 / 8,655 / 1,089）检索不到，单篇丢 9 题。改用 `--pages all` 全量重解析（`D:\mineru_papers_out_v2`）后 v1→v2 **+7.0 个点**（87→94），RC 篇 8 题全部翻正。
