@@ -240,20 +240,26 @@ def chunk_pdf(pdf_path: str | Path, parser: str = "auto") -> list[Chunk]:
     """
     pdf_path = Path(pdf_path)
     if parser in ("auto", "mineru"):
-        from .mineru_parser import find_mineru_markdown, mineru_markdown_to_pages
+        from .mineru_parser import (
+            find_mineru_markdown,
+            mineru_markdown_to_sections,
+        )
         md = find_mineru_markdown(pdf_path)
         if md is not None:
-            print(f"[chunker] 解析器=MinerU  {md.name}")
-            pages = mineru_markdown_to_pages(md)
+            print(f"[chunker] 解析器=MinerU(markdown-aware)  {md.name}")
+            # M2.19：MinerU 走专属分块（# 层级 / HTML 表格列名 / 段落边界），
+            # 不再降级成文本行复用 split_into_sections
+            sections = mineru_markdown_to_sections(md)
         elif parser == "mineru":
             raise FileNotFoundError(
                 f"[chunker] 未找到 MinerU 产物（MINERU_OUT_DIR）: {pdf_path.stem}")
         else:
             print(f"[chunker] 解析器=pdfplumber（无 MinerU 产物）  {pdf_path.name}")
             pages = extract_pdf_text(pdf_path)
+            sections = split_into_sections(pages)
     else:
         pages = extract_pdf_text(pdf_path)
-    sections = split_into_sections(pages)
+        sections = split_into_sections(pages)
 
     chunks = []
     for section_title, section_text, start_page in sections:

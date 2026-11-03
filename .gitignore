@@ -15,6 +15,7 @@ data/chroma_eval_4p/
 data/chroma_pdfplumber/
 data/chroma_mineru_v1/
 data/chroma_mineru_v2/
+data/chroma_mineru_v2md/
 data/bm25.pkl
 data/bm25_*.pkl
 data/chunks.pkl

@@ -234,27 +234,31 @@ RAG 对 "语料库元问题" 有结构性盲区 —— 论文正文不会写 "�
 
 > 评测方式：`eval/run_eval.py` 三阶段解耦 —— ask（真实链路问答落盘）→ judge（DeepSeek 判分）→ ragas（faithfulness/relevancy/precision/recall），支持 `--tag` 输出隔离、断点续跑与 `--skip-ask` 复用样本；评测客户端显式 `timeout=120`、ask 单样本容错（失败跳过不崩整组）。四组驱动见 `scripts/run_ablation.py`，完整明细见 `eval/results/`。
 
-### 解析器 A/B 评测：MinerU vs pdfplumber（2026-11-01 五篇口径，含 --pages all 根因修复）
+### 解析器 A/B 评测：MinerU vs pdfplumber（2026-11-01 五篇口径 + 2026-11-03 专属分块）
 
-同一 100 题 Golden Set（5 篇口径）、同一检索链路（RRF+MMR+查询扩展全开），**唯一变量 = PDF 解析器**（pdfplumber 双栏还原 vs MinerU 4.0.12 本地结构化 Markdown + 适配器转换后分块入库）；库独立构建（`data/chroma_pdfplumber` 220 块 / `chroma_mineru_v2` 243 块，mineru_v1 截断版已于 2026-11-03 清理），杜绝建库覆盖污染：
+同一 100 题 Golden Set（5 篇口径）、同一检索链路（RRF+MMR+查询扩展全开），**唯一变量 = PDF 解析器 + 分块方式**（pdfplumber 双栏还原 vs MinerU 4.0.12 本地结构化 Markdown）；库独立构建（`data/chroma_pdfplumber` 220 块 / `chroma_mineru_v2` 243 块 / `chroma_mineru_v2md` 275 块，mineru_v1 截断版已于 2026-11-03 清理），杜绝建库覆盖污染：
 
-| 组 | 解析器 | 块数 | 答案准确率 |
+| 组 | 解析器 / 分块 | 块数 | 答案准确率 |
 | --- | --- | --- | --- |
 | full（baseline） | pdfplumber（双栏坐标还原） | 220 | **96.0%** |
 | mineru_ab | MinerU 4.0.12（默认解析，仅前 10 页；截断版产物已清理，数字留档对照） | 171 | 87.0% |
-| **mineru_v2** | MinerU 4.0.12（`--pages all` 全量重解析） | 243 | **94.0%** |
+| mineru_v2 | MinerU 4.0.12（`--pages all` 全量重解析 + 降级复用 pdfplumber 分块器） | 243 | 94.0% |
+| **mineru_v2md** | MinerU 4.0.12（`--pages all` + **markdown-aware 专属分块**：`#` 层级直接用 / 复杂表列名保留 / 段落边界切分） | 275 | **95.0%** |
 
 **根因闭环**：MinerU 4.x 默认只解析 PDF 前 10 页且静默成功——NTIRE（26 页）/RC（18 页）/Restormer（12 页）的 Experiments 段整体丢失，RC 训练/测试划分数字（4,713 / 729 / 8,655 / 1,089）检索不到，单篇丢 9 题。改用 `--pages all` 全量重解析（`D:\mineru_papers_out_v2`）后 v1→v2 **+7.0 个点**（87→94），RC 篇 8 题全部翻正。
 
-**逐题 diff（full 96 vs v2 94，6 题差异）**：
-- **MinerU 变好 2 题**：`nr-11`（置信度生成数 N/阈值/EMA 系数）、`nr-13`（视频扩散模型三模块组成）——MinerU 版面阅读顺序与标题层级对细节参数检索更好；
-- **MinerU 变差 4 题**：`nr-05`（FDM 提升——v2 检索到 Table 1 绝对数但回答写成"未找到明确数值"，LLM 保守表述）、`rc-25`（夜间挑战表述）、`all-16`（共同动机）、`all-17`（新数据集——漏列 NightRain 自建 RealNightRain）——均为 LLM 表述/口径波动类，**无解析内容缺失**（v1 时代的截断硬伤已全部修复）。
+**专属分块验证（M2.19，2026-11-03）**：此前 MinerU 一直"降级复用"pdfplumber 的分块器（剥掉 `#` 让文本流猜层级、复杂表压平成文本行），结构化红利被浪费。新增 `mineru_markdown_to_sections` 直接利用标记切分：`#` 数量即标题层级（Abstract/References 等无编号标题正确定级）、HTML 复杂表列名行+数值行独立成块并带 "Table N" 锚点、段落边界切分。v2→v2md **+1.0 个点**（94→95，净翻正 3 题：`nr-05`/`rc-25`/`all-17`）。
+
+**逐题 diff（full 96 vs v2md 95，5 题差异）**：
+- **v2md 变好 2 题**：`nr-11`（置信度生成数 N=3/阈值 0.5/EMA 系数）、`nr-13`（视频扩散模型三模块：Patch Partition/Time Embedding/Transformer blocks）——**markdown-aware 的结构化段落与细节参数检索更强，nr 类 20/20 满分**（pdfplumber 仅 18/20）、rc 类 26/26 追平 baseline；
+- **v2md 变差 3 题**：`all-02`（五篇论文对比表述口径）、`all-07`（数据集使用——漏列细节）、`all-16`（共同应用动机）——均为全库对比类 LLM 表述/口径波动（all 类 14/18 vs pdfplumber 17/18）：v2md 库块粒度更细（NTIRE 116 块 vs 90），跨论文检索候选更散，元问题上下文稀释，**无解析内容缺失**。
 
 **结论**：
 1. **MinerU 解析完整性问题已闭环**：`--pages all` 全量重解析让 MinerU 从 87.0% 提升到 94.0%（+7.0），截断导致的单篇丢题全部翻正；
-2. **但 MinerU 仍低于 pdfplumber baseline 2.0 个点**（94.0 vs 96.0）：差距集中在 LLM 表述与元问题口径，不再有解析内容缺失级硬伤——两解析器已接近同水平；
-3. 若追求更高上限，潜在方向（未实施）：**双解析融合**——MinerU 提供版面结构/阅读顺序，pdfplumber 数字句做交叉补齐兜底；
-4. GPU 版 torch 2.5.1+cu124 已装（`cuda=True`，RTX 4060），可加速 MinerU 推理（本次评测为 CPU 推理，与结果无关）。
+2. **专属分块方向验证有效**：markdown-aware 分块再 +1.0（94→95），表格数字题与结构细节题（nr/rc 类）受益最明显——MinerU 的结构化产物确实值得差异化处理而非降级复用；
+3. **但 MinerU 仍低于 pdfplumber baseline 1.0 个点**（95.0 vs 96.0）：差距集中在 all 类全库对比题的 LLM 表述口径（v2md 块更碎稀释元问题上下文），无解析内容缺失级硬伤——两解析器同水平，方向差异在"结构细节检索" vs "全库上下文广度"；
+4. 若追求更高上限，潜在方向（未实施）：**双解析融合**——MinerU 提供版面结构/阅读顺序，pdfplumber 数字句做交叉补齐兜底；
+5. GPU 版 torch 2.5.1+cu124 已装（`cuda=True`，RTX 4060），可加速 MinerU 推理（本次评测为 CPU 推理，与结果无关）。
 
 
 
